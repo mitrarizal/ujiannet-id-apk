@@ -14,26 +14,18 @@ import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.appopen.AppOpenAd
 import java.util.Date
 
-class MyApplication : Application(), Application.ActivityLifecycleCallbacks, DefaultLifecycleObserver {
+class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
 
-    private var appOpenAdManager: AppOpenAdManager? = null
+    private lateinit var appOpenAdManager: AppOpenAdManager
     private var currentActivity: Activity? = null
 
     override fun onCreate() {
         super.onCreate()
         registerActivityLifecycleCallbacks(this)
-        
         MobileAds.initialize(this) {}
-        
-        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-        appOpenAdManager = AppOpenAdManager()
-    }
 
-    override fun onStart(owner: LifecycleOwner) {
-        // Pemanggilan super dihapus total untuk menghindari ambiguitas
-        currentActivity?.let {
-            appOpenAdManager?.showAdIfAvailable(it)
-        }
+        appOpenAdManager = AppOpenAdManager()
+        ProcessLifecycleOwner.get().lifecycle.addObserver(appOpenAdManager)
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
@@ -44,13 +36,17 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks, Def
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
     override fun onActivityDestroyed(activity: Activity) { currentActivity = null }
 
-    private inner class AppOpenAdManager {
+    private inner class AppOpenAdManager : DefaultLifecycleObserver {
         private var appOpenAd: AppOpenAd? = null
         private var isLoadingAd = false
         private var isShowingAd = false
         private var loadTime: Long = 0
 
         private val AD_UNIT_ID = "ca-app-pub-6983364109428063/4604136517"
+
+        override fun onStart(owner: LifecycleOwner) {
+            currentActivity?.let { showAdIfAvailable(it) }
+        }
 
         fun loadAd(activity: Activity) {
             if (isLoadingAd || isAdAvailable()) return
