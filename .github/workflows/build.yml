@@ -22,7 +22,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build Bundle (.aab)
-        run: ./gradlew bundleRelease
+        run: gradle bundleRelease
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
