@@ -30,7 +30,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks, Def
     }
 
     override fun onStart(owner: LifecycleOwner) {
-        // Hapus super.onStart(owner) untuk menghindari bentrok supertype
+        // Pemanggilan super.onStart(owner) dihapus total untuk mencegah bentrok
         currentActivity?.let {
             appOpenAdManager?.showAdIfAvailable(it)
         }
