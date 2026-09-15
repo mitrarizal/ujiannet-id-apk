@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
         webView.settings.domStorageEnabled = true
         webView.webViewClient = WebViewClient()
 
-        webView.loadUrl("https://ujiannet.id")
+        webView.loadUrl("https://ujiannet.id.com")
     }
 
     override fun onBackPressed() {
