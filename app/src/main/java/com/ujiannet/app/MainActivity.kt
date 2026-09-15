@@ -28,45 +28,36 @@ class MainActivity : AppCompatActivity() {
     private var rewardedAd: RewardedAd? = null
     private var progressDialog: ProgressDialog? = null
 
-    // Variable untuk menyimpan URL file yang akan diunduh dari WebView
     private var pendingDownloadUrl: String? = null
     private var pendingUserAgent: String? = null
     private var pendingContentDisposition: String? = null
     private var pendingMimeType: String? = null
 
-    // ID UNIT IKLAN REWARD
     private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/5725646492"
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate()
+        super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 1. Inisialisasi Mobile Ads SDK
-        MobileAds.initialize(this) {}
+        MobileAds.initialize(this@MainActivity) {}
 
-        // 2. Inisialisasi Iklan Banner (AdView)
         adView = findViewById(R.id.adView)
         val adRequest = AdRequest.Builder().build()
         adView.loadAd(adRequest)
 
-        // 3. Preload Iklan Reward
         loadRewardedAd()
 
-        // 4. Inisialisasi Dialog Loading saat Iklan Reward diproses
-        progressDialog = ProgressDialog(this).apply {
+        progressDialog = ProgressDialog(this@MainActivity).apply {
             setMessage("Memuat iklan reward, mohon tunggu...")
             setCancelable(false)
         }
 
-        // 5. Inisialisasi WebView
         webView = findViewById(R.id.webView)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.webViewClient = WebViewClient()
 
-        // 6. DETEKSI UNDUHAN DI WEBVIEW:
-        // Ketika pengguna menekan tombol unduh file di website, iklan reward akan dimunculkan lebih dulu
-        webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->
+        webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
             pendingDownloadUrl = url
             pendingUserAgent = userAgent
             pendingContentDisposition = contentDisposition
@@ -75,15 +66,13 @@ class MainActivity : AppCompatActivity() {
             triggerRewardedAdBeforeDownload()
         }
 
-        // Buka domain utama Anda
         webView.loadUrl("https://ujiannet-id.com")
     }
 
-    /** Memuat Iklan Reward di Latar Belakang */
     private fun loadRewardedAd() {
         val adRequest = AdRequest.Builder().build()
         RewardedAd.load(
-            this,
+            this@MainActivity,
             REWARDED_AD_UNIT_ID,
             adRequest,
             object : RewardedAdLoadCallback() {
@@ -98,7 +87,6 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    /** Memicu Iklan Reward Sebelum Pengunduhan */
     private fun triggerRewardedAdBeforeDownload() {
         if (rewardedAd != null) {
             showRewardedAd()
@@ -106,7 +94,7 @@ class MainActivity : AppCompatActivity() {
             progressDialog?.show()
             val adRequest = AdRequest.Builder().build()
             RewardedAd.load(
-                this,
+                this@MainActivity,
                 REWARDED_AD_UNIT_ID,
                 adRequest,
                 object : RewardedAdLoadCallback() {
@@ -119,7 +107,6 @@ class MainActivity : AppCompatActivity() {
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                         progressDialog?.dismiss()
                         rewardedAd = null
-                        // Jika iklan gagal dimuat, tetap jalankan pengunduhan file
                         startFileDownload()
                     }
                 }
@@ -127,12 +114,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Menampilkan Iklan Reward */
     private fun showRewardedAd() {
         rewardedAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
                 rewardedAd = null
-                loadRewardedAd() // Muat ulang untuk pengunduhan berikutnya
+                loadRewardedAd()
             }
 
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
@@ -143,23 +129,22 @@ class MainActivity : AppCompatActivity() {
             override fun onAdShowedFullScreenContent() {}
         }
 
-        rewardedAd?.show(this) { rewardItem ->
-            Toast.makeText(this, "Iklan selesai! Memulai pengunduhan...", Toast.LENGTH_SHORT).show()
+        rewardedAd?.show(this@MainActivity) {
+            Toast.makeText(this@MainActivity, "Iklan selesai! Memulai pengunduhan...", Toast.LENGTH_SHORT).show()
             startFileDownload()
         }
     }
 
-    /** Eksekusi Pengunduhan File Asli Melalui Android DownloadManager */
     private fun startFileDownload() {
         val url = pendingDownloadUrl ?: return
         try {
             val request = DownloadManager.Request(Uri.parse(url))
             request.setMimeType(pendingMimeType)
-            
+
             val cookies = CookieManager.getInstance().getCookie(url)
             request.addRequestHeader("cookie", cookies)
             request.addRequestHeader("User-Agent", pendingUserAgent)
-            
+
             val fileName = URLUtil.guessFileName(url, pendingContentDisposition, pendingMimeType)
             request.setTitle(fileName)
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
@@ -174,7 +159,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Fitur Tombol Kembali (Back Navigation) WebView */
     override fun onBackPressed() {
         if (webView.canGoBack()) {
             webView.goBack()
