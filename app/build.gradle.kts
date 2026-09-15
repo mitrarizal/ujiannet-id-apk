@@ -37,5 +37,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
+    
+    // Google Mobile Ads SDK
     implementation("com.google.android.gms:play-services-ads:23.0.0")
+
+    // DITAMBAHKAN: Pustaka untuk ProcessLifecycleOwner di MyApplication.kt
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
 }
