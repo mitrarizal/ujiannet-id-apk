@@ -23,7 +23,6 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks, Def
         super.onCreate()
         registerActivityLifecycleCallbacks(this)
         
-        // Inisialisasi Google Mobile Ads SDK
         MobileAds.initialize(this) {}
         
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
@@ -31,7 +30,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks, Def
     }
 
     override fun onStart(owner: LifecycleOwner) {
-        super.onStart(owner)
+        // Hapus super.onStart(owner) untuk menghindari bentrok supertype
         currentActivity?.let {
             appOpenAdManager?.showAdIfAvailable(it)
         }
@@ -45,14 +44,12 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks, Def
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
     override fun onActivityDestroyed(activity: Activity) { currentActivity = null }
 
-    /** Inner Class Pengelola Iklan Pembuka Aplikasi (App Open Ad) */
     private inner class AppOpenAdManager {
         private var appOpenAd: AppOpenAd? = null
         private var isLoadingAd = false
         private var isShowingAd = false
         private var loadTime: Long = 0
 
-        // ID UNIT IKLAN PEMBUKA APLIKASI
         private val AD_UNIT_ID = "ca-app-pub-6983364109428063/4604136517"
 
         fun loadAd(activity: Activity) {
