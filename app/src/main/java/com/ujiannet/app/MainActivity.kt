@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.URLUtil
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -33,8 +34,6 @@ class MainActivity : AppCompatActivity() {
     private var pendingContentDisposition: String? = null
     private var pendingMimeType: String? = null
 
-    // ID Tes Rewarded Ad Resmi Google: "ca-app-pub-3940256099942544/5224354917"
-    // ID Asli AdMob Kamu: "ca-app-pub-6983364109428063/5725646492"
     private val REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,12 +42,10 @@ class MainActivity : AppCompatActivity() {
 
         MobileAds.initialize(this@MainActivity) {}
 
-        // Inisialisasi Iklan Banner
         adView = findViewById(R.id.adView)
         val adRequest = AdRequest.Builder().build()
         adView.loadAd(adRequest)
 
-        // Pre-load Iklan Reward sejak awal
         loadRewardedAd()
 
         progressDialog = ProgressDialog(this@MainActivity).apply {
@@ -61,6 +58,9 @@ class MainActivity : AppCompatActivity() {
         webView.settings.domStorageEnabled = true
         webView.webViewClient = WebViewClient()
 
+        // 1. HUBUNGKAN JAVASCRIPT BLOG DENGAN KOTLIN
+        webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
+
         webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
             pendingDownloadUrl = url
             pendingUserAgent = userAgent
@@ -71,6 +71,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.loadUrl("https://ujiannet-id.com")
+    }
+
+    // 2. KELAS INTERFACE JAVASCRIPT
+    inner class WebAppInterface {
+        @JavascriptInterface
+        fun triggerRewardedAd() {
+            runOnUiThread {
+                triggerRewardedAdBeforeDownload()
+            }
+        }
     }
 
     private fun loadRewardedAd() {
@@ -113,10 +123,10 @@ class MainActivity : AppCompatActivity() {
                         rewardedAd = null
                         Toast.makeText(
                             this@MainActivity,
-                            "Gagal memuat iklan (${loadAdError.code}), melanjutkan unduhan...",
+                            "Gagal memuat iklan, melanjutkan ke file...",
                             Toast.LENGTH_SHORT
                         ).show()
-                        startFileDownload()
+                        notifyJsRewardEarned()
                     }
                 }
             )
@@ -128,19 +138,27 @@ class MainActivity : AppCompatActivity() {
             override fun onAdDismissedFullScreenContent() {
                 rewardedAd = null
                 loadRewardedAd()
+                // Panggil fungsi JS di blog untuk membuka file setelah iklan selesai
+                notifyJsRewardEarned()
             }
 
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                 rewardedAd = null
-                startFileDownload()
+                notifyJsRewardEarned()
             }
 
             override fun onAdShowedFullScreenContent() {}
         }
 
         rewardedAd?.show(this@MainActivity) {
-            Toast.makeText(this@MainActivity, "Iklan selesai! Memulai pengunduhan...", Toast.LENGTH_SHORT).show()
-            startFileDownload()
+            Toast.makeText(this@MainActivity, "Iklan selesai! Membuka file...", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 3. FUNGSI UNTUK MEMANGGIL BALIK JS DI BLOG (onRewardEarned)
+    private fun notifyJsRewardEarned() {
+        webView.post {
+            webView.evaluateJavascript("javascript:onRewardEarned();", null)
         }
     }
 
