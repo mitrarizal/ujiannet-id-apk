@@ -42,7 +42,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         private var isShowingAd = false
         private var loadTime: Long = 0
 
-        private val AD_UNIT_ID = "ca-app-pub-6983364109428063/4604136517"
+        private val AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
 
         override fun onStart(owner: LifecycleOwner) {
             currentActivity?.let { showAdIfAvailable(it) }
