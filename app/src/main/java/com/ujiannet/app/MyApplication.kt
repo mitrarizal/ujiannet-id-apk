@@ -2,8 +2,8 @@ package com.ujiannet.app
 
 import android.app.Activity
 import android.app.Application
-import android.content.Context // Tambahkan import ini
 import android.os.Bundle
+import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -26,10 +26,6 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         MobileAds.initialize(this) {}
 
         appOpenAdManager = AppOpenAdManager()
-        
-        // PERBAIKAN 1: Muat iklan secara paksa saat aplikasi pertama kali diinisialisasi
-        appOpenAdManager.loadAd(this) 
-        
         ProcessLifecycleOwner.get().lifecycle.addObserver(appOpenAdManager)
     }
 
@@ -47,22 +43,20 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         private var isShowingAd = false
         private var loadTime: Long = 0
 
-        private val AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395168" // ID Tes
+        // ID Tes App Open Ad Resmi Google
+        private val AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395168"
 
         override fun onStart(owner: LifecycleOwner) {
             currentActivity?.let { showAdIfAvailable(it) }
         }
 
-        // PERBAIKAN 2: Ubah tipe parameter dari Activity menjadi Context
-        fun loadAd(context: Context) {
+        fun loadAd(activity: Activity) {
             if (isLoadingAd || isAdAvailable()) return
 
             isLoadingAd = true
             val request = AdRequest.Builder().build()
-            
-            // AppOpenAd.load mendukung Context, jadi aman menggunakan 'this' dari Application
             AppOpenAd.load(
-                context,
+                activity,
                 AD_UNIT_ID,
                 request,
                 object : AppOpenAd.AppOpenAdLoadCallback() {
@@ -70,13 +64,17 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                         appOpenAd = ad
                         isLoadingAd = false
                         loadTime = Date().time
-                        
-                        // Jika activity sudah siap saat iklan selesai diunduh, langsung tampilkan
-                        currentActivity?.let { showAdIfAvailable(it) }
+                        Log.d("AdMobAppOpen", "Iklan berhasil diunduh!")
+
+                        // KUNCI PERBAIKAN: Begitu unduhan selesai, langsung tampilkan di layar aktif!
+                        currentActivity?.let { activeActivity ->
+                            showAdIfAvailable(activeActivity)
+                        }
                     }
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                         isLoadingAd = false
+                        Log.e("AdMobAppOpen", "Gagal unduh: ${loadAdError.message}")
                     }
                 }
             )
@@ -88,7 +86,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
             return dateDifference < numMilliSecondsPerHour * numHours
         }
 
-        private fun isAdAvailable(): Boolean {
+        fun isAdAvailable(): Boolean {
             return appOpenAd != null && wasLoadTimeLessThanNHoursAgo(4)
         }
 
@@ -98,7 +96,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                     override fun onAdDismissedFullScreenContent() {
                         appOpenAd = null
                         isShowingAd = false
-                        loadAd(activity) // Activity mewarisi Context, sehingga tetap valid
+                        loadAd(activity)
                     }
 
                     override fun onAdFailedToShowFullScreenContent(adError: AdError) {
