@@ -2,6 +2,7 @@ package com.ujiannet.app
 
 import android.app.Activity
 import android.app.Application
+import android.content.Context // Tambahkan import ini
 import android.os.Bundle
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -25,19 +26,15 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         MobileAds.initialize(this) {}
 
         appOpenAdManager = AppOpenAdManager()
+        
+        // PERBAIKAN 1: Muat iklan secara paksa saat aplikasi pertama kali diinisialisasi
+        appOpenAdManager.loadAd(this) 
+        
         ProcessLifecycleOwner.get().lifecycle.addObserver(appOpenAdManager)
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-    
-    // PERBAIKAN 1: Panggil loadAd saat activity dimulai agar iklan siap lebih cepat
-    override fun onActivityStarted(activity: Activity) { 
-        currentActivity = activity 
-        if (!appOpenAdManager.isAdAvailable()) {
-            appOpenAdManager.loadAd(activity)
-        }
-    }
-    
+    override fun onActivityStarted(activity: Activity) { currentActivity = activity }
     override fun onActivityResumed(activity: Activity) { currentActivity = activity }
     override fun onActivityPaused(activity: Activity) {}
     override fun onActivityStopped(activity: Activity) {}
@@ -50,21 +47,22 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         private var isShowingAd = false
         private var loadTime: Long = 0
 
-        // Ganti ID ini dengan ID App Open milikmu jika sudah siap rilis:
-        // "ca-app-pub-6983364109428063/4604136517"
-        private val AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395168"
+        private val AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395168" // ID Tes
 
         override fun onStart(owner: LifecycleOwner) {
             currentActivity?.let { showAdIfAvailable(it) }
         }
 
-        fun loadAd(activity: Activity) {
+        // PERBAIKAN 2: Ubah tipe parameter dari Activity menjadi Context
+        fun loadAd(context: Context) {
             if (isLoadingAd || isAdAvailable()) return
 
             isLoadingAd = true
             val request = AdRequest.Builder().build()
+            
+            // AppOpenAd.load mendukung Context, jadi aman menggunakan 'this' dari Application
             AppOpenAd.load(
-                activity,
+                context,
                 AD_UNIT_ID,
                 request,
                 object : AppOpenAd.AppOpenAdLoadCallback() {
@@ -72,6 +70,9 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                         appOpenAd = ad
                         isLoadingAd = false
                         loadTime = Date().time
+                        
+                        // Jika activity sudah siap saat iklan selesai diunduh, langsung tampilkan
+                        currentActivity?.let { showAdIfAvailable(it) }
                     }
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
@@ -87,8 +88,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
             return dateDifference < numMilliSecondsPerHour * numHours
         }
 
-        // PERBAIKAN 2: Hapus kata 'private' di depan fun ini
-        fun isAdAvailable(): Boolean {
+        private fun isAdAvailable(): Boolean {
             return appOpenAd != null && wasLoadTimeLessThanNHoursAgo(4)
         }
 
@@ -98,7 +98,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                     override fun onAdDismissedFullScreenContent() {
                         appOpenAd = null
                         isShowingAd = false
-                        loadAd(activity)
+                        loadAd(activity) // Activity mewarisi Context, sehingga tetap valid
                     }
 
                     override fun onAdFailedToShowFullScreenContent(adError: AdError) {
