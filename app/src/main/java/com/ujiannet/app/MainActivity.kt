@@ -25,7 +25,7 @@ class MainActivity : AppCompatActivity() {
     private var rewardedAd: RewardedAd? = null
     private var pendingDownloadUrl: String? = null
 
-    private val REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
+    private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/4604136517"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
