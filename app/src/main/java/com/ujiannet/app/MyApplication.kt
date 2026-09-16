@@ -30,7 +30,13 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-    override fun onActivityStarted(activity: Activity) { currentActivity = activity }
+    
+    // PERBAIKAN UTAMA: Begitu Activity aktif, langsung picu pemuatan/penayangan iklan
+    override fun onActivityStarted(activity: Activity) { 
+        currentActivity = activity 
+        appOpenAdManager.showAdIfAvailable(activity)
+    }
+    
     override fun onActivityResumed(activity: Activity) { currentActivity = activity }
     override fun onActivityPaused(activity: Activity) {}
     override fun onActivityStopped(activity: Activity) {}
@@ -66,7 +72,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                         loadTime = Date().time
                         Log.d("AdMobAppOpen", "Iklan berhasil diunduh!")
 
-                        // KUNCI PERBAIKAN: Begitu unduhan selesai, langsung tampilkan di layar aktif!
+                        // Tampilkan iklan begitu selesai diunduh di layar aktif
                         currentActivity?.let { activeActivity ->
                             showAdIfAvailable(activeActivity)
                         }
@@ -74,7 +80,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                         isLoadingAd = false
-                        Log.e("AdMobAppOpen", "Gagal unduh: ${loadAdError.message}")
+                        Log.e("AdMobAppOpen", "Gagal unduh: ${loadAdError.message} (Kode: ${loadAdError.code})")
                     }
                 }
             )
@@ -102,6 +108,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                     override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                         appOpenAd = null
                         isShowingAd = false
+                        Log.e("AdMobAppOpen", "Gagal tampil: ${adError.message}")
                         loadAd(activity)
                     }
 
