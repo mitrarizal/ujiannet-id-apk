@@ -17,24 +17,31 @@ import java.util.Date
 
 class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
 
-    private lateinit var appOpenAdManager: AppOpenAdManager
+    private var appOpenAdManager: AppOpenAdManager? = null
     private var currentActivity: Activity? = null
 
     override fun onCreate() {
         super.onCreate()
         registerActivityLifecycleCallbacks(this)
-        MobileAds.initialize(this) {}
 
-        appOpenAdManager = AppOpenAdManager()
-        ProcessLifecycleOwner.get().lifecycle.addObserver(appOpenAdManager)
+        // Inisialisasi SDK AdMob secara asinkron sebelum memuat iklan
+        MobileAds.initialize(this) {
+            Log.d("AdMobAppOpen", "SDK AdMob Berhasil Diinisialisasi.")
+            appOpenAdManager = AppOpenAdManager()
+            ProcessLifecycleOwner.get().lifecycle.addObserver(appOpenAdManager!!)
+            
+            // Muat iklan saat SDK siap dan ada Activity aktif
+            currentActivity?.let { activity ->
+                appOpenAdManager?.loadAd(activity)
+            }
+        }
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
     
-    // PERBAIKAN UTAMA: Begitu Activity aktif, langsung picu pemuatan/penayangan iklan
     override fun onActivityStarted(activity: Activity) { 
         currentActivity = activity 
-        appOpenAdManager.showAdIfAvailable(activity)
+        appOpenAdManager?.showAdIfAvailable(activity)
     }
     
     override fun onActivityResumed(activity: Activity) { currentActivity = activity }
@@ -49,7 +56,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         private var isShowingAd = false
         private var loadTime: Long = 0
 
-        // ID Tes App Open Ad Resmi Google
+        // Unit ID Iklan (Gunakan ID Tes Google saat pengujian, ganti ID Asli saat Rilis)
         private val AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395168"
 
         override fun onStart(owner: LifecycleOwner) {
@@ -70,9 +77,9 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                         appOpenAd = ad
                         isLoadingAd = false
                         loadTime = Date().time
-                        Log.d("AdMobAppOpen", "Iklan berhasil diunduh!")
+                        Log.d("AdMobAppOpen", "Iklan App Open berhasil dimuat.")
 
-                        // Tampilkan iklan begitu selesai diunduh di layar aktif
+                        // Tampilkan iklan jika Activity sedang aktif di layar
                         currentActivity?.let { activeActivity ->
                             showAdIfAvailable(activeActivity)
                         }
@@ -80,7 +87,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                         isLoadingAd = false
-                        Log.e("AdMobAppOpen", "Gagal unduh: ${loadAdError.message} (Kode: ${loadAdError.code})")
+                        Log.e("AdMobAppOpen", "Gagal memuat iklan: ${loadAdError.message} (Kode: ${loadAdError.code})")
                     }
                 }
             )
@@ -102,18 +109,20 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                     override fun onAdDismissedFullScreenContent() {
                         appOpenAd = null
                         isShowingAd = false
+                        Log.d("AdMobAppOpen", "Iklan ditutup, memuat ulang...")
                         loadAd(activity)
                     }
 
                     override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                         appOpenAd = null
                         isShowingAd = false
-                        Log.e("AdMobAppOpen", "Gagal tampil: ${adError.message}")
+                        Log.e("AdMobAppOpen", "Gagal menampilkan iklan: ${adError.message}")
                         loadAd(activity)
                     }
 
                     override fun onAdShowedFullScreenContent() {
                         isShowingAd = true
+                        Log.d("AdMobAppOpen", "Iklan App Open sedang tampil.")
                     }
                 }
                 appOpenAd?.show(activity)
