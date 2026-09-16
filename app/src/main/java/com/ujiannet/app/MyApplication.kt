@@ -42,7 +42,8 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         private var isShowingAd = false
         private var loadTime: Long = 0
 
-        private val AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
+        // ID Tes App Open Ad Resmi
+        private val AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395921"
 
         override fun onStart(owner: LifecycleOwner) {
             currentActivity?.let { showAdIfAvailable(it) }
@@ -62,6 +63,9 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                         appOpenAd = ad
                         isLoadingAd = false
                         loadTime = Date().time
+                        
+                        // Perbaikan: Jika iklan selesai diunduh saat aplikasi terbuka, langsung tampilkan
+                        currentActivity?.let { showAdIfAvailable(it) }
                     }
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
