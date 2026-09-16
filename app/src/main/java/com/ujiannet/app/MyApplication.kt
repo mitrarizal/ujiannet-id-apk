@@ -43,7 +43,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         private var loadTime: Long = 0
 
         // ID Tes App Open Ad Resmi
-        private val AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395921"
+        private val AD_UNIT_ID = "ca-app-pub-6983364109428063/5725646492"
 
         override fun onStart(owner: LifecycleOwner) {
             currentActivity?.let { showAdIfAvailable(it) }
