@@ -33,7 +33,9 @@ class MainActivity : AppCompatActivity() {
     private var pendingContentDisposition: String? = null
     private var pendingMimeType: String? = null
 
-    private val REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395921"
+    // ID Tes Rewarded Ad Resmi Google: "ca-app-pub-3940256099942544/5224354917"
+    // ID Asli AdMob Kamu: "ca-app-pub-6983364109428063/5725646492"
+    private val REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,10 +43,12 @@ class MainActivity : AppCompatActivity() {
 
         MobileAds.initialize(this@MainActivity) {}
 
+        // Inisialisasi Iklan Banner
         adView = findViewById(R.id.adView)
         val adRequest = AdRequest.Builder().build()
         adView.loadAd(adRequest)
 
+        // Pre-load Iklan Reward sejak awal
         loadRewardedAd()
 
         progressDialog = ProgressDialog(this@MainActivity).apply {
@@ -107,6 +111,11 @@ class MainActivity : AppCompatActivity() {
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                         progressDialog?.dismiss()
                         rewardedAd = null
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Gagal memuat iklan (${loadAdError.code}), melanjutkan unduhan...",
+                            Toast.LENGTH_SHORT
+                        ).show()
                         startFileDownload()
                     }
                 }
