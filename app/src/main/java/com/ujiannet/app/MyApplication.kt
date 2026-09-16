@@ -29,7 +29,15 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-    override fun onActivityStarted(activity: Activity) { currentActivity = activity }
+    
+    // PERBAIKAN 1: Panggil loadAd saat activity dimulai agar iklan siap lebih cepat
+    override fun onActivityStarted(activity: Activity) { 
+        currentActivity = activity 
+        if (!appOpenAdManager.isAdAvailable()) {
+            appOpenAdManager.loadAd(activity)
+        }
+    }
+    
     override fun onActivityResumed(activity: Activity) { currentActivity = activity }
     override fun onActivityPaused(activity: Activity) {}
     override fun onActivityStopped(activity: Activity) {}
@@ -42,7 +50,8 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         private var isShowingAd = false
         private var loadTime: Long = 0
 
-        // ID Tes App Open Ad Resmi
+        // Ganti ID ini dengan ID App Open milikmu jika sudah siap rilis:
+        // "ca-app-pub-6983364109428063/4604136517"
         private val AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395168"
 
         override fun onStart(owner: LifecycleOwner) {
@@ -63,9 +72,6 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                         appOpenAd = ad
                         isLoadingAd = false
                         loadTime = Date().time
-                        
-                        // Perbaikan: Jika iklan selesai diunduh saat aplikasi terbuka, langsung tampilkan
-                        currentActivity?.let { showAdIfAvailable(it) }
                     }
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
@@ -81,7 +87,8 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
             return dateDifference < numMilliSecondsPerHour * numHours
         }
 
-        private fun isAdAvailable(): Boolean {
+        // PERBAIKAN 2: Hapus kata 'private' di depan fun ini
+        fun isAdAvailable(): Boolean {
             return appOpenAd != null && wasLoadTimeLessThanNHoursAgo(4)
         }
 
