@@ -33,7 +33,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingContentDisposition: String? = null
     private var pendingMimeType: String? = null
 
-    private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/5725646492"
+    private val REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/9257395921"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
