@@ -23,11 +23,11 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Build APK (.apk)
-        run: gradle assembleDebug
+      - name: Build AAB (.aab)
+        run: gradle bundleDebug
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: app-debug-aab
+          path: app/build/outputs/bundle/debug/app-debug.aab
