@@ -23,11 +23,17 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Build APK (.apk)
-        run: gradle assembleDebug
+      - name: Build Release APK
+        run: gradle assembleRelease
+
+      - name: Sign APK with Release Certificate
+        run: |
+          keytool -genkeypair -v -keystore release.keystore -alias ujiannetkey -keyalg RSA -keysize 2048 -validity 10000 -storepass Ujiannet2026! -keypass Ujiannet2026! -dname "CN=Ujiannet-id, OU=Education, O=Ujiannet-id, L=Indonesia, C=ID"
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
+          $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-key-alias ujiannetkey --ks-pass pass:Ujiannet2026! --key-pass pass:Ujiannet2026! --out app/build/outputs/apk/release/app-release-signed.apk app/build/outputs/apk/release/app-release-unsigned.apk
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: app-release-signed
+          path: app/build/outputs/apk/release/app-release-signed.apk
