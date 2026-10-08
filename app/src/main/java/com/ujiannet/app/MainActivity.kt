@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -42,7 +44,35 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
-        webView.webViewClient = WebViewClient()
+        
+        // Custom WebViewClient untuk menangani offline/error
+        webView.webViewClient = object : WebViewClient() {
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                if (request?.isForMainFrame == true) {
+                    val html = """
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <style>
+                                body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #ffffff; }
+                                img { max-width: 80%; height: auto; }
+                            </style>
+                        </head>
+                        <body>
+                            <img src="file:///android_asset/no_internet.png">
+                        </body>
+                        </html>
+                    """.trimIndent()
+
+                    view?.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
+                }
+            }
+        }
 
         // Daftarkan Interface JavaScript
         webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
