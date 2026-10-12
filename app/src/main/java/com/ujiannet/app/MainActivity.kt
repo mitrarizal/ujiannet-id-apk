@@ -10,6 +10,7 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -26,11 +27,13 @@ import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var adView: AdView
+    private lateinit var adContainerView: FrameLayout
+    private var adView: AdView? = null
 
     private var rewardedAd: RewardedAd? = null
     private var pendingDownloadUrl: String? = null
 
+    private val BANNER_AD_UNIT_ID = "ca-app-pub-6983364109428063/6624153015"
     private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/5725646492"
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,11 +42,9 @@ class MainActivity : AppCompatActivity() {
 
         MobileAds.initialize(this@MainActivity) {}
 
-        // Inisialisasi AdView & Setel Ukuran Banner Sebelum Di-load
-        adView = findViewById(R.id.adView)
-        adView.setAdSize(getAdSize()) // <--- BARIS INI WAJIB DIPANGGUL SEBELUM loadAd
-        val adRequest = AdRequest.Builder().build()
-        adView.loadAd(adRequest)
+        // Inisialisasi Kontainer Banner
+        adContainerView = findViewById(R.id.adContainerView)
+        loadBannerAd()
 
         loadRewardedAd()
 
@@ -93,17 +94,33 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Fungsi untuk menghitung ukuran Adaptive Banner berdasarkan lebar layar
+    // Memuat Banner Adaptif secara Programmatic ke dalam FrameLayout
+    private fun loadBannerAd() {
+        val adView = AdView(this)
+        adView.adUnitId = BANNER_AD_UNIT_ID
+        adView.setAdSize(getAdSize())
+        this.adView = adView
+
+        adContainerView.removeAllViews()
+        adContainerView.addView(adView)
+
+        val adRequest = AdRequest.Builder().build()
+        adView.loadAd(adRequest)
+    }
+
+    // Perhitungan lebar layar yang aman dari angka 0 atau exception
     private fun getAdSize(): AdSize {
         val displayMetrics = resources.displayMetrics
-        val adWidthPixels = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        var adWidthPixels = displayMetrics.widthPixels
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val windowMetrics = windowManager.currentWindowMetrics
             val insets = windowMetrics.windowInsets
                 .getInsetsIgnoringVisibility(WindowInsets.Type.systemBars())
-            windowMetrics.bounds.width() - insets.left - insets.right
-        } else {
-            @Suppress("DEPRECATION")
-            displayMetrics.widthPixels
+            val calculatedWidth = windowMetrics.bounds.width() - insets.left - insets.right
+            if (calculatedWidth > 0) {
+                adWidthPixels = calculatedWidth
+            }
         }
 
         val density = displayMetrics.density
@@ -220,17 +237,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        adView.pause()
+        adView?.pause()
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
-        adView.resume()
+        adView?.resume()
     }
 
     override fun onDestroy() {
-        adView.destroy()
+        adView?.destroy()
         webView.destroy()
         super.onDestroy()
     }
