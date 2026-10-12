@@ -2,6 +2,7 @@ package com.ujiannet.app
 
 import android.app.Activity
 import android.app.Application
+import android.content.Context
 import android.os.Bundle
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -29,12 +30,21 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
-    override fun onActivityStarted(activity: Activity) { currentActivity = activity }
-    override fun onActivityResumed(activity: Activity) { currentActivity = activity }
+    override fun onActivityStarted(activity: Activity) { 
+        currentActivity = activity 
+    }
+    override fun onActivityResumed(activity: Activity) { 
+        currentActivity = activity 
+    }
     override fun onActivityPaused(activity: Activity) {}
     override fun onActivityStopped(activity: Activity) {}
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
-    override fun onActivityDestroyed(activity: Activity) { currentActivity = null }
+    override fun onActivityDestroyed(activity: Activity) { 
+        // Hanya hapus reference jika activity yang hancur adalah activity saat ini
+        if (currentActivity == activity) {
+            currentActivity = null 
+        }
+    }
 
     private inner class AppOpenAdManager : DefaultLifecycleObserver {
         private var appOpenAd: AppOpenAd? = null
@@ -42,20 +52,25 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         private var isShowingAd = false
         private var loadTime: Long = 0
 
-        // ID Tes App Open Ad Resmi
+        // Masukkan ID Unit Iklan App Open Ad Produksi Anda
         private val AD_UNIT_ID = "ca-app-pub-6983364109428063/4604136517"
 
         override fun onStart(owner: LifecycleOwner) {
-            currentActivity?.let { showAdIfAvailable(it) }
+            // Iklan HANYA dipanggil saat aplikasi kembali dari background ke foreground
+            currentActivity?.let { activity ->
+                showAdIfAvailable(activity)
+            }
         }
 
-        fun loadAd(activity: Activity) {
+        fun loadAd(context: Context) {
             if (isLoadingAd || isAdAvailable()) return
 
             isLoadingAd = true
             val request = AdRequest.Builder().build()
+            
+            // Gunakan Application context untuk memuat iklan
             AppOpenAd.load(
-                activity,
+                context,
                 AD_UNIT_ID,
                 request,
                 object : AppOpenAd.AppOpenAdLoadCallback() {
@@ -63,9 +78,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                         appOpenAd = ad
                         isLoadingAd = false
                         loadTime = Date().time
-                        
-                        // Perbaikan: Jika iklan selesai diunduh saat aplikasi terbuka, langsung tampilkan
-                        currentActivity?.let { showAdIfAvailable(it) }
+                        // Jangan panggil showAdIfAvailable di sini agar tidak mengganggu pengguna!
                     }
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
@@ -86,18 +99,21 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         }
 
         fun showAdIfAvailable(activity: Activity) {
+            // Pastikan Activity tidak dalam keadaan hancur atau hampir selesai
+            if (activity.isFinishing || activity.isDestroyed) return
+
             if (!isShowingAd && isAdAvailable()) {
                 appOpenAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
                     override fun onAdDismissedFullScreenContent() {
                         appOpenAd = null
                         isShowingAd = false
-                        loadAd(activity)
+                        loadAd(this@MyApplication)
                     }
 
                     override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                         appOpenAd = null
                         isShowingAd = false
-                        loadAd(activity)
+                        loadAd(this@MyApplication)
                     }
 
                     override fun onAdShowedFullScreenContent() {
@@ -106,7 +122,7 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                 }
                 appOpenAd?.show(activity)
             } else {
-                loadAd(activity)
+                loadAd(this@MyApplication)
             }
         }
     }
