@@ -9,6 +9,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
@@ -44,8 +45,8 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
-        
-        // Custom WebViewClient untuk menangani offline/error
+
+        // Custom WebViewClient untuk menangani kondisi offline/error
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(
                 view: WebView?,
@@ -78,10 +79,20 @@ class MainActivity : AppCompatActivity() {
         webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
 
         webView.loadUrl("https://ujiannet-id.com")
+
+        // Penanganan tombol kembali modern (Android 13+)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    finish()
+                }
+            }
+        })
     }
 
     inner class WebAppInterface {
-        // Dipanggil saat mengunduh pertama kali (Memutar Iklan)
         @JavascriptInterface
         fun startDownloadProcess(url: String) {
             runOnUiThread {
@@ -90,7 +101,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Dipanggil jika iklan sudah pernah ditonton (Langsung Buka File)
         @JavascriptInterface
         fun openDownloadLink(url: String) {
             runOnUiThread {
@@ -144,13 +154,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showRewardedAd() {
+        var hasEarnedReward = false
+
         rewardedAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
                 rewardedAd = null
                 loadRewardedAd()
-                // Buka file dan beri tahu JS bahwa iklan telah selesai
-                pendingDownloadUrl?.let { executeOpenLink(it) }
-                notifyJsRewardEarned()
+
+                if (hasEarnedReward) {
+                    pendingDownloadUrl?.let { executeOpenLink(it) }
+                    notifyJsRewardEarned()
+                } else {
+                    Toast.makeText(this@MainActivity, "Tonton iklan sampai selesai untuk mengunduh.", Toast.LENGTH_SHORT).show()
+                }
             }
 
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
@@ -162,7 +178,9 @@ class MainActivity : AppCompatActivity() {
             override fun onAdShowedFullScreenContent() {}
         }
 
-        rewardedAd?.show(this@MainActivity) {}
+        rewardedAd?.show(this@MainActivity) { rewardItem ->
+            hasEarnedReward = true
+        }
     }
 
     private fun notifyJsRewardEarned() {
@@ -171,21 +189,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Membuka link Google Drive secara native di aplikasi Google Drive / Chrome HP
     private fun executeOpenLink(url: String) {
         try {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             startActivity(intent)
+            pendingDownloadUrl = null
         } catch (e: Exception) {
             Toast.makeText(applicationContext, "Gagal membuka tautan file.", Toast.LENGTH_SHORT).show()
         }
     }
 
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
-        }
+    // Pengelolaan Siklus Hidup untuk Mencegah Kebocoran Memori (Memory Leak)
+    override fun onPause() {
+        adView.pause()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        adView.resume()
+    }
+
+    override fun onDestroy() {
+        adView.destroy()
+        webView.destroy()
+        super.onDestroy()
     }
 }
