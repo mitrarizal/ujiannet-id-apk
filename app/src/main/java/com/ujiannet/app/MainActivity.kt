@@ -109,7 +109,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
-        webView.loadUrl("https://ujiannet-id.com")
+        webView.loadUrl("https://ujiannet-id.blogspot.com/")
 
         // Penanganan tombol kembali biasa (kembali ke halaman sebelumnya tanpa iklan)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
