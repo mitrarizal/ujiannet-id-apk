@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity() {
     private val BANNER_AD_UNIT_ID = "ca-app-pub-6983364109428063/6624153015"
     private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/5725646492"
     // Ganti dengan ID Unit Iklan Interstitial AdMob Anda
-    private val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6983364109428063/XXXXXXXXXX"
+    private val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6983364109428063/5534667709"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
