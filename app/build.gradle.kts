@@ -13,6 +13,8 @@ android {
         targetSdk = 34
         versionCode = 3
         versionName = "1.0.2"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -34,13 +36,15 @@ android {
 }
 
 dependencies {
+    // AndroidX Core & UI
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
-    
+
     // Google Mobile Ads SDK
     implementation("com.google.android.gms:play-services-ads:23.0.0")
 
-    // DITAMBAHKAN: Pustaka untuk ProcessLifecycleOwner di MyApplication.kt
-    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+    // Pustaka Lifecycle (Diperlukan oleh ProcessLifecycleOwner pada MyApplication.kt)
+    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 }
