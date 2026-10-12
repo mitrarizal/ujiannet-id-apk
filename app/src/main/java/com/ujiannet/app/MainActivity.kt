@@ -2,7 +2,9 @@ package com.ujiannet.app
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowInsets
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -13,6 +15,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
@@ -36,7 +39,9 @@ class MainActivity : AppCompatActivity() {
 
         MobileAds.initialize(this@MainActivity) {}
 
+        // Inisialisasi AdView dengan Anchored Adaptive Banner Size
         adView = findViewById(R.id.adView)
+        adView.setAdSize(getAdSize()) // <--- Menyetel ukuran banner adaptif
         val adRequest = AdRequest.Builder().build()
         adView.loadAd(adRequest)
 
@@ -90,6 +95,25 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    // Fungsi untuk menghitung lebar layar HP secara presisi untuk Adaptive Banner
+    private fun getAdSize(): AdSize {
+        val displayMetrics = resources.displayMetrics
+        val adWidthPixels = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val windowMetrics = windowManager.currentWindowMetrics
+            val insets = windowMetrics.windowInsets
+                .getInsetsIgnoringVisibility(WindowInsets.Type.systemBars())
+            windowMetrics.bounds.width() - insets.left - insets.right
+        } else {
+            @Suppress("DEPRECATION")
+            displayMetrics.widthPixels
+        }
+
+        val density = displayMetrics.density
+        val adWidth = (adWidthPixels / density).toInt()
+
+        return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, adWidth)
     }
 
     inner class WebAppInterface {
@@ -199,7 +223,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Pengelolaan Siklus Hidup untuk Mencegah Kebocoran Memori (Memory Leak)
     override fun onPause() {
         adView.pause()
         super.onPause()
