@@ -39,9 +39,9 @@ class MainActivity : AppCompatActivity() {
 
         MobileAds.initialize(this@MainActivity) {}
 
-        // Inisialisasi AdView dengan Anchored Adaptive Banner Size
+        // Inisialisasi AdView & Setel Ukuran Banner Sebelum Di-load
         adView = findViewById(R.id.adView)
-        adView.setAdSize(getAdSize()) // <--- Menyetel ukuran banner adaptif
+        adView.setAdSize(getAdSize()) // <--- BARIS INI WAJIB DIPANGGUL SEBELUM loadAd
         val adRequest = AdRequest.Builder().build()
         adView.loadAd(adRequest)
 
@@ -51,7 +51,6 @@ class MainActivity : AppCompatActivity() {
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
 
-        // Custom WebViewClient untuk menangani kondisi offline/error
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedError(
                 view: WebView?,
@@ -80,12 +79,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Daftarkan Interface JavaScript
         webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
-
         webView.loadUrl("https://ujiannet-id.com")
 
-        // Penanganan tombol kembali modern (Android 13+)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) {
@@ -97,7 +93,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Fungsi untuk menghitung lebar layar HP secara presisi untuk Adaptive Banner
+    // Fungsi untuk menghitung ukuran Adaptive Banner berdasarkan lebar layar
     private fun getAdSize(): AdSize {
         val displayMetrics = resources.displayMetrics
         val adWidthPixels = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -111,7 +107,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val density = displayMetrics.density
-        val adWidth = (adWidthPixels / density).toInt()
+        val adWidth = if (density > 0) (adWidthPixels / density).toInt() else 320
 
         return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, adWidth)
     }
