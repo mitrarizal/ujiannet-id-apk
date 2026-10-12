@@ -21,6 +21,8 @@ import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 
@@ -31,10 +33,16 @@ class MainActivity : AppCompatActivity() {
     private var adView: AdView? = null
 
     private var rewardedAd: RewardedAd? = null
+    private var interstitialAd: InterstitialAd? = null
     private var pendingDownloadUrl: String? = null
+
+    // Penghitung berapa kali postingan/link diklik
+    private var postClickCount = 0
 
     private val BANNER_AD_UNIT_ID = "ca-app-pub-6983364109428063/6624153015"
     private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/5725646492"
+    // Ganti dengan ID Unit Iklan Interstitial AdMob Anda
+    private val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6983364109428063/XXXXXXXXXX"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,17 +50,37 @@ class MainActivity : AppCompatActivity() {
 
         MobileAds.initialize(this@MainActivity) {}
 
-        // Inisialisasi Kontainer Banner
         adContainerView = findViewById(R.id.adContainerView)
         loadBannerAd()
 
         loadRewardedAd()
+        loadInterstitialAd()
 
         webView = findViewById(R.id.webView)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
 
         webView.webViewClient = object : WebViewClient() {
+
+            // mencegat klik link postingan di WebView
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url?.toString() ?: return false
+
+                // Cek apakah link yang diklik masih di dalam domain situs Anda
+                if (url.contains("ujiannet-id.com")) {
+                    postClickCount++
+
+                    // Tampilkan iklan setiap 2 kali klik postingan agar tidak mengganggu pengguna
+                    if (postClickCount % 2 == 0 && interstitialAd != null) {
+                        showInterstitialAd {
+                            view?.loadUrl(url)
+                        }
+                        return true // Tahan navigasi WebView sampai iklan ditutup
+                    }
+                }
+                return false // Jika bukan gilirannya/iklan belum siap, buka link seperti biasa
+            }
+
             override fun onReceivedError(
                 view: WebView?,
                 request: WebResourceRequest?,
@@ -83,6 +111,7 @@ class MainActivity : AppCompatActivity() {
         webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
         webView.loadUrl("https://ujiannet-id.com")
 
+        // Penanganan tombol kembali biasa (kembali ke halaman sebelumnya tanpa iklan)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) {
@@ -94,7 +123,47 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Memuat Banner Adaptif secara Programmatic ke dalam FrameLayout
+    // LOGIKA IKLAN INTERSTITIAL (SAAT KLIK POSTINGAN)
+    private fun loadInterstitialAd() {
+        val adRequest = AdRequest.Builder().build()
+        InterstitialAd.load(
+            this,
+            INTERSTITIAL_AD_UNIT_ID,
+            adRequest,
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    interstitialAd = ad
+                }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    interstitialAd = null
+                }
+            }
+        )
+    }
+
+    private fun showInterstitialAd(onAdDismissed: () -> Unit) {
+        if (interstitialAd != null) {
+            interstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    interstitialAd = null
+                    loadInterstitialAd() // Load ulang iklan berikutnya
+                    onAdDismissed()
+                }
+
+                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                    interstitialAd = null
+                    loadInterstitialAd()
+                    onAdDismissed()
+                }
+            }
+            interstitialAd?.show(this)
+        } else {
+            onAdDismissed()
+        }
+    }
+
+    // LOGIKA ADAPTIVE BANNER
     private fun loadBannerAd() {
         val adView = AdView(this)
         adView.adUnitId = BANNER_AD_UNIT_ID
@@ -108,7 +177,6 @@ class MainActivity : AppCompatActivity() {
         adView.loadAd(adRequest)
     }
 
-    // Perhitungan lebar layar yang aman dari angka 0 atau exception
     private fun getAdSize(): AdSize {
         val displayMetrics = resources.displayMetrics
         var adWidthPixels = displayMetrics.widthPixels
@@ -129,6 +197,7 @@ class MainActivity : AppCompatActivity() {
         return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, adWidth)
     }
 
+    // INTERFACE JAVASCRIPT
     inner class WebAppInterface {
         @JavascriptInterface
         fun startDownloadProcess(url: String) {
@@ -146,6 +215,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // LOGIKA REWARDED AD
     private fun loadRewardedAd() {
         val adRequest = AdRequest.Builder().build()
         RewardedAd.load(
