@@ -11,19 +11,22 @@ android {
         applicationId = "com.ujiannet.app"
         minSdk = 21
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.0.5"
+        versionCode = 7
+        versionName = "1.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // MEMBACA SANDI SECARA AMAN DARI ENVIRONMENT VARIABLE
     signingConfigs {
         create("release") {
             storeFile = file("release.jks")
             storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
             keyAlias = System.getenv("KEY_ALIAS") ?: ""
             keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+
+            // Diperlukan untuk kompatibilitas penuh HP Oppo/ColorOS
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
 
