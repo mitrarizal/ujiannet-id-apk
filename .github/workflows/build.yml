@@ -19,6 +19,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # Mengunci Gradle ke versi 8.5 agar tidak menggunakan Gradle 9.8.0
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
       # 1. Dekode Keystore Menggunakan Python
       - name: Decode Keystore
         env:
@@ -34,19 +40,13 @@ jobs:
               f.write(base64.b64decode(clean))
           "
 
-      # 2. Build dan Sign APK (Otomatis memilih gradlew atau gradle)
+      # 2. Build dan Sign APK menggunakan Gradle 8.5
       - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          if [ -f gradlew ]; then
-            chmod +x gradlew
-            ./gradlew assembleRelease
-          else
-            gradle assembleRelease
-          fi
+        run: gradle assembleRelease
 
       # 3. Upload file APK hasil build
       - name: Upload Signed APK
