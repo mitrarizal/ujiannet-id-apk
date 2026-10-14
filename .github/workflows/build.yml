@@ -1,27 +1,39 @@
-name: Generate Keystore Base64
+name: Build Android App
 
 on:
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  generate:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate Keystore
-        run: |
-          keytool -genkeypair -v \
-            -keystore release.jks \
-            -alias Key_mitra170119 \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass SandiMitra170119 \
-            -keypass SandiMitra170119 \
-            -dname "CN=UjianNet, OU=App, O=UjianNet, L=Jakarta, ST=Jakarta, C=ID"
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Convert to Base64 and Print
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Build Release APK
+        run: gradle assembleRelease
+
+      - name: Sign APK with Release Certificate
         run: |
-          echo "==================== AMBIL TEKS DI BAWAH INI ===================="
-          base64 -w 0 release.jks
-          echo ""
-          echo "=================================================================="
+          keytool -genkeypair -v -keystore release.keystore -alias ujiannetkey -keyalg RSA -keysize 2048 -validity 10000 -storepass Ujiannet2026! -keypass Ujiannet2026! -dname "CN=Ujiannet-id, OU=Education, O=Ujiannet-id, L=Indonesia, C=ID"
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
+          $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-key-alias ujiannetkey --ks-pass pass:Ujiannet2026! --key-pass pass:Ujiannet2026! --out app/build/outputs/apk/release/app-release-signed.apk app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-signed
+          path: app/build/outputs/apk/release/app-release-signed.apk
