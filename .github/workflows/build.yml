@@ -19,28 +19,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # Mengunci Gradle ke versi 8.5 agar tidak menggunakan Gradle 9.8.0
+      # Mengunci Gradle ke versi 8.5
       - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
 
-      # 1. Dekode Keystore Menggunakan Python
-      - name: Decode Keystore
+      # 1. Buat Keystore JKS langsung di dalam runner (100% valid & bebas corrupt)
+      - name: Generate Keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          python3 -c "
-          import os, base64, re
-          raw = os.environ.get('KEYSTORE_BASE64', '')
-          clean = re.sub(r'[^A-Za-z0-9+/=]', '', raw)
-          pad = len(clean) % 4
-          if pad: clean += '=' * (4 - pad)
-          with open('app/release.jks', 'wb') as f:
-              f.write(base64.b64decode(clean))
-          "
+          keytool -genkeypair -v \
+            -keystore app/release.jks \
+            -storetype JKS \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -dname "CN=UjianNet, OU=App, O=UjianNet, L=Jakarta, ST=Jakarta, C=ID"
 
-      # 2. Build dan Sign APK menggunakan Gradle 8.5
+      # 2. Build dan Sign APK secara otomatis lewat Gradle
       - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
