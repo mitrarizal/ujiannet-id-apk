@@ -8,8 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -18,22 +19,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
-
-      - name: Build Release APK
-        run: gradle assembleRelease
-
-      - name: Sign APK with Release Certificate
+      # 1. Dekode Keystore dari GitHub Secrets ke folder app/
+      - name: Decode Keystore
         run: |
-          keytool -genkeypair -v -keystore release.keystore -alias ujiannetkey -keyalg RSA -keysize 2048 -validity 10000 -storepass Ujiannet2026! -keypass Ujiannet2026! -dname "CN=Ujiannet-id, OU=Education, O=Ujiannet-id, L=Indonesia, C=ID"
-          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -n 1)
-          $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-key-alias ujiannetkey --ks-pass pass:Ujiannet2026! --key-pass pass:Ujiannet2026! --out app/build/outputs/apk/release/app-release-signed.apk app/build/outputs/apk/release/app-release-unsigned.apk
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.jks
 
-      - name: Upload Artifact
+      # 2. Build dan Sign APK secara otomatis lewat Gradle
+      - name: Build Release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+
+      # 3. Upload file APK yang sudah jadi
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-signed
-          path: app/build/outputs/apk/release/app-release-signed.apk
+          path: app/build/outputs/apk/release/app-release.apk
