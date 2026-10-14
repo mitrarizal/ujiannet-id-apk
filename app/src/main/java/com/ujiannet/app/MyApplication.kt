@@ -23,10 +23,14 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
     override fun onCreate() {
         super.onCreate()
         registerActivityLifecycleCallbacks(this)
-        MobileAds.initialize(this) {}
 
         appOpenAdManager = AppOpenAdManager()
         ProcessLifecycleOwner.get().lifecycle.addObserver(appOpenAdManager)
+
+        // OPTIMASI: Pre-load iklan segera setelah SDK AdMob siap
+        MobileAds.initialize(this) {
+            appOpenAdManager.loadAd(this)
+        }
     }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
@@ -40,7 +44,6 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
     override fun onActivityStopped(activity: Activity) {}
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
     override fun onActivityDestroyed(activity: Activity) { 
-        // Hanya hapus reference jika activity yang hancur adalah activity saat ini
         if (currentActivity == activity) {
             currentActivity = null 
         }
@@ -52,11 +55,10 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         private var isShowingAd = false
         private var loadTime: Long = 0
 
-        // Masukkan ID Unit Iklan App Open Ad Produksi Anda
         private val AD_UNIT_ID = "ca-app-pub-6983364109428063/4604136517"
 
         override fun onStart(owner: LifecycleOwner) {
-            // Iklan HANYA dipanggil saat aplikasi kembali dari background ke foreground
+            // Dipanggil setiap kali aplikasi berpindah dari background ke foreground
             currentActivity?.let { activity ->
                 showAdIfAvailable(activity)
             }
@@ -68,7 +70,6 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
             isLoadingAd = true
             val request = AdRequest.Builder().build()
             
-            // Gunakan Application context untuk memuat iklan
             AppOpenAd.load(
                 context,
                 AD_UNIT_ID,
@@ -78,7 +79,6 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
                         appOpenAd = ad
                         isLoadingAd = false
                         loadTime = Date().time
-                        // Jangan panggil showAdIfAvailable di sini agar tidak mengganggu pengguna!
                     }
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
@@ -99,7 +99,6 @@ class MyApplication : Application(), Application.ActivityLifecycleCallbacks {
         }
 
         fun showAdIfAvailable(activity: Activity) {
-            // Pastikan Activity tidak dalam keadaan hancur atau hampir selesai
             if (activity.isFinishing || activity.isDestroyed) return
 
             if (!isShowingAd && isAdAvailable()) {
