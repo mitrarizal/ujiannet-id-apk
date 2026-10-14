@@ -19,12 +19,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 1. Dekode Keystore dari GitHub Secrets ke folder app/
+      # 1. Dekode Keystore dari GitHub Secrets ke folder app/ (bebas karakter pengganggu)
       - name: Decode Keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.jks
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n ' | base64 -d > app/release.jks
 
-      # 2. Build dan Sign APK secara otomatis lewat Gradle
+      # 2. Beri izin eksekusi script gradlew
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # 3. Build dan Sign APK secara otomatis lewat Gradle
       - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -32,7 +36,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
-      # 3. Upload file APK yang sudah jadi
+      # 4. Upload file APK yang sudah jadi
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
