@@ -19,7 +19,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 1. Dekode Keystore Menggunakan Python (Aman & Bebas Error Shell)
+      # 1. Dekode Keystore Menggunakan Python
       - name: Decode Keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -34,19 +34,21 @@ jobs:
               f.write(base64.b64decode(clean))
           "
 
-      # 2. Beri izin eksekusi script gradlew
-      - name: Make gradlew executable
-        run: chmod +x gradlew
-
-      # 3. Build dan Sign APK secara otomatis lewat Gradle
+      # 2. Build dan Sign APK (Otomatis memilih gradlew atau gradle)
       - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew assembleRelease
+        run: |
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew assembleRelease
+          else
+            gradle assembleRelease
+          fi
 
-      # 4. Upload file APK hasil build
+      # 3. Upload file APK hasil build
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
