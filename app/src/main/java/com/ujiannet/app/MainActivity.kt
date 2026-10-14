@@ -45,83 +45,88 @@ class MainActivity : AppCompatActivity() {
     private val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6983364109428063/5534667709"
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+    super.onCreate(savedInstanceState)
+    setContentView(R.layout.activity_main)
 
-        MobileAds.initialize(this@MainActivity) {}
+    adContainerView = findViewById(R.id.adContainerView)
+    webView = findViewById(R.id.webView)
 
-        adContainerView = findViewById(R.id.adContainerView)
+    // Optional: Tambahkan Test Device ID agar iklan tes selalu muncul saat testing
+    /*
+    val testDeviceIds = listOf("MASUKKAN_GAID_HP_KAMU")
+    val configuration = RequestConfiguration.Builder().setTestDeviceIds(testDeviceIds).build()
+    MobileAds.setRequestConfiguration(configuration)
+    */
+
+    // INISIALISASI ADMOB DAN PANGGUL IKLAN DI DALAM CALLBACK
+    MobileAds.initialize(this@MainActivity) {
         loadBannerAd()
-
         loadRewardedAd()
         loadInterstitialAd()
+    }
 
-        webView = findViewById(R.id.webView)
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
+    webView.settings.javaScriptEnabled = true
+    webView.settings.domStorageEnabled = true
 
-        webView.webViewClient = object : WebViewClient() {
+    webView.webViewClient = object : WebViewClient() {
 
-            // mencegat klik link postingan di WebView
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                val url = request?.url?.toString() ?: return false
+        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+            val url = request?.url?.toString() ?: return false
 
-                // Cek apakah link yang diklik masih di dalam domain situs Anda
-                if (url.contains("ujiannet-id.com")) {
-                    postClickCount++
+            // Pengecekan domain blogspot sudah benar
+            if (url.contains("ujiannet-id.blogspot.com")) {
+                postClickCount++
 
-                    // Tampilkan iklan setiap 2 kali klik postingan agar tidak mengganggu pengguna
-                    if (postClickCount % 2 == 0 && interstitialAd != null) {
-                        showInterstitialAd {
-                            view?.loadUrl(url)
-                        }
-                        return true // Tahan navigasi WebView sampai iklan ditutup
+                if (postClickCount % 2 == 0 && interstitialAd != null) {
+                    showInterstitialAd {
+                        view?.loadUrl(url)
                     }
-                }
-                return false // Jika bukan gilirannya/iklan belum siap, buka link seperti biasa
-            }
-
-            override fun onReceivedError(
-                view: WebView?,
-                request: WebResourceRequest?,
-                error: WebResourceError?
-            ) {
-                if (request?.isForMainFrame == true) {
-                    val html = """
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                            <style>
-                                body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #ffffff; }
-                                img { max-width: 80%; height: auto; }
-                            </style>
-                        </head>
-                        <body>
-                            <img src="file:///android_asset/no_internet.png">
-                        </body>
-                        </html>
-                    """.trimIndent()
-
-                    view?.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
+                    return true
                 }
             }
+            return false
         }
 
-        webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
-        webView.loadUrl("https://ujiannet-id.blogspot.com/")
+        override fun onReceivedError(
+            view: WebView?,
+            request: WebResourceRequest?,
+            error: WebResourceError?
+        ) {
+            if (request?.isForMainFrame == true) {
+                val html = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <style>
+                            body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #ffffff; }
+                            img { max-width: 80%; height: auto; }
+                        </style>
+                    </head>
+                    <body>
+                        <img src="file:///android_asset/no_internet.png">
+                    </body>
+                    </html>
+                """.trimIndent()
 
-        // Penanganan tombol kembali biasa (kembali ke halaman sebelumnya tanpa iklan)
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                } else {
-                    finish()
-                }
+                view?.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
             }
-        })
+        }
     }
+
+    webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
+    webView.loadUrl("https://ujiannet-id.blogspot.com/")
+
+    onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            if (webView.canGoBack()) {
+                webView.goBack()
+            } else {
+                finish()
+            }
+        }
+    })
+}
 
     // LOGIKA IKLAN INTERSTITIAL (SAAT KLIK POSTINGAN)
     private fun loadInterstitialAd() {
