@@ -1,4 +1,4 @@
-name: Build Android App
+name: Build Android App (AAB)
 
 on:
   push:
@@ -19,41 +19,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # Mengunci Gradle ke versi 8.5
       - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
 
-      # 1. Buat Keystore JKS langsung di dalam runner (100% valid & bebas corrupt)
-      - name: Generate Keystore
+      - name: Decode Fixed Keystore
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          keytool -genkeypair -v \
-            -keystore app/release.jks \
-            -storetype JKS \
-            -alias "$KEY_ALIAS" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -keypass "$KEY_PASSWORD" \
-            -dname "CN=UjianNet, OU=App, O=UjianNet, L=Jakarta, ST=Jakarta, C=ID"
+          python3 -c "
+          import os, base64
+          raw = os.environ.get('KEYSTORE_BASE64', '').strip()
+          with open('app/release.jks', 'wb') as f:
+              f.write(base64.b64decode(raw))
+          "
 
-      # 2. Build dan Sign APK secara otomatis lewat Gradle
-      - name: Build Release APK
+      - name: Build Release AAB
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle assembleRelease
+        run: gradle bundleRelease
 
-      # 3. Upload file APK hasil build
-      - name: Upload Signed APK
+      - name: Upload Signed AAB
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-signed
-          path: app/build/outputs/apk/release/app-release.apk
+          name: app-release-bundle
+          path: app/build/outputs/bundle/release/app-release.aab
