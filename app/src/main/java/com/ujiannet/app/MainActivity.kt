@@ -36,9 +36,18 @@ class MainActivity : AppCompatActivity() {
     private var interstitialAd: InterstitialAd? = null
     private var pendingDownloadUrl: String? = null
 
-    // Penghitung berapa kali postingan/link diklik & jeda waktu klik
+    // Variable Status Loading Iklan (Mencegah multiple request)
+    private var isInterstitialLoading = false
+    private var isRewardedLoading = false
+
+    // Penghitung Klik & Jeda Waktu Klik Fisik
     private var postClickCount = 0
     private var lastClickTime: Long = 0
+
+    // Pembatasan Frekuensi Iklan Interstitial (Max 2x per 5 menit)
+    private var adShowCountInWindow = 0
+    private var windowStartTime: Long = 0
+    private val FIVE_MINUTES_MS = 5 * 60 * 1000L
 
     private val BANNER_AD_UNIT_ID = "ca-app-pub-6983364109428063/6624153015"
     private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/5725646492"
@@ -51,7 +60,7 @@ class MainActivity : AppCompatActivity() {
         adContainerView = findViewById(R.id.adContainerView)
         webView = findViewById(R.id.webView)
 
-        // INISIALISASI ADMOB DAN PANGGIL IKLAN
+        // INISIALISASI ADMOB
         MobileAds.initialize(this@MainActivity) {
             loadBannerAd()
             loadRewardedAd()
@@ -69,13 +78,24 @@ class MainActivity : AppCompatActivity() {
                 if (url.contains("ujiannet-id.blogspot.com")) {
                     val currentTime = System.currentTimeMillis()
 
-                    // Hanya memproses jika jeda antar-klik fisik > 1 detik (1000ms)
+                    // Reset jendela waktu jika sudah melewati 5 menit
+                    if (currentTime - windowStartTime > FIVE_MINUTES_MS) {
+                        windowStartTime = currentTime
+                        adShowCountInWindow = 0
+                    }
+
+                    // Menghindari double tap / spam klik cepat (< 1 detik)
                     if (currentTime - lastClickTime > 1000) {
                         lastClickTime = currentTime
                         postClickCount++
 
-                        if (postClickCount % 2 == 0 && interstitialAd != null) {
+                        // Tampilkan iklan HANYA jika:
+                        // 1. Klik kelipatan genap
+                        // 2. Iklan dalam 5 menit terakhir masih < 2 kali
+                        // 3. Iklan Interstitial siap ditayangkan
+                        if (postClickCount % 2 == 0 && adShowCountInWindow < 2 && interstitialAd != null) {
                             showInterstitialAd {
+                                adShowCountInWindow++
                                 view?.loadUrl(url)
                             }
                             return true
@@ -126,8 +146,11 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // LOGIKA IKLAN INTERSTITIAL (SAAT KLIK POSTINGAN)
+    // LOGIKA IKLAN INTERSTITIAL
     private fun loadInterstitialAd() {
+        if (isInterstitialLoading || interstitialAd != null) return
+        isInterstitialLoading = true
+
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(
             this,
@@ -136,18 +159,21 @@ class MainActivity : AppCompatActivity() {
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     interstitialAd = ad
+                    isInterstitialLoading = false
                 }
 
                 override fun onAdFailedToLoad(adError: LoadAdError) {
                     interstitialAd = null
+                    isInterstitialLoading = false
                 }
             }
         )
     }
 
     private fun showInterstitialAd(onAdDismissed: () -> Unit) {
-        if (interstitialAd != null) {
-            interstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
+        val ad = interstitialAd
+        if (ad != null) {
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     interstitialAd = null
                     loadInterstitialAd()
@@ -160,7 +186,7 @@ class MainActivity : AppCompatActivity() {
                     onAdDismissed()
                 }
             }
-            interstitialAd?.show(this)
+            ad.show(this)
         } else {
             onAdDismissed()
         }
@@ -220,6 +246,9 @@ class MainActivity : AppCompatActivity() {
 
     // LOGIKA REWARDED AD
     private fun loadRewardedAd() {
+        if (isRewardedLoading || rewardedAd != null) return
+        isRewardedLoading = true
+
         val adRequest = AdRequest.Builder().build()
         RewardedAd.load(
             this@MainActivity,
@@ -228,10 +257,12 @@ class MainActivity : AppCompatActivity() {
             object : RewardedAdLoadCallback() {
                 override fun onAdLoaded(ad: RewardedAd) {
                     rewardedAd = ad
+                    isRewardedLoading = false
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     rewardedAd = null
+                    isRewardedLoading = false
                 }
             }
         )
@@ -240,8 +271,9 @@ class MainActivity : AppCompatActivity() {
     private fun triggerRewardedAdBeforeDownload() {
         if (rewardedAd != null) {
             showRewardedAd()
-        } else {
+        } else if (!isRewardedLoading) {
             Toast.makeText(this@MainActivity, "Memuat iklan, mohon tunggu...", Toast.LENGTH_SHORT).show()
+            isRewardedLoading = true
             val adRequest = AdRequest.Builder().build()
             RewardedAd.load(
                 this@MainActivity,
@@ -250,46 +282,56 @@ class MainActivity : AppCompatActivity() {
                 object : RewardedAdLoadCallback() {
                     override fun onAdLoaded(ad: RewardedAd) {
                         rewardedAd = ad
+                        isRewardedLoading = false
                         showRewardedAd()
                     }
 
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                         rewardedAd = null
+                        isRewardedLoading = false
                         Toast.makeText(this@MainActivity, "Gagal memuat iklan, langsung membuka file...", Toast.LENGTH_SHORT).show()
                         pendingDownloadUrl?.let { executeOpenLink(it) }
                     }
                 }
             )
+        } else {
+            Toast.makeText(this@MainActivity, "Sedang memuat iklan, coba beberapa saat lagi...", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun showRewardedAd() {
         var hasEarnedReward = false
+        val ad = rewardedAd
 
-        rewardedAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdDismissedFullScreenContent() {
-                rewardedAd = null
-                loadRewardedAd()
+        if (ad != null) {
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    rewardedAd = null
+                    loadRewardedAd()
 
-                if (hasEarnedReward) {
+                    if (hasEarnedReward) {
+                        pendingDownloadUrl?.let { executeOpenLink(it) }
+                        notifyJsRewardEarned()
+                    } else {
+                        Toast.makeText(this@MainActivity, "Tonton iklan sampai selesai untuk mengunduh.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                    rewardedAd = null
+                    loadRewardedAd()
                     pendingDownloadUrl?.let { executeOpenLink(it) }
                     notifyJsRewardEarned()
-                } else {
-                    Toast.makeText(this@MainActivity, "Tonton iklan sampai selesai untuk mengunduh.", Toast.LENGTH_SHORT).show()
                 }
+
+                override fun onAdShowedFullScreenContent() {}
             }
 
-            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                rewardedAd = null
-                pendingDownloadUrl?.let { executeOpenLink(it) }
-                notifyJsRewardEarned()
+            ad.show(this@MainActivity) { rewardItem ->
+                hasEarnedReward = true
             }
-
-            override fun onAdShowedFullScreenContent() {}
-        }
-
-        rewardedAd?.show(this@MainActivity) { rewardItem ->
-            hasEarnedReward = true
+        } else {
+            pendingDownloadUrl?.let { executeOpenLink(it) }
         }
     }
 
