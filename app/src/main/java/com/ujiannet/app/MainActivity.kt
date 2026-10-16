@@ -44,11 +44,6 @@ class MainActivity : AppCompatActivity() {
     private var postClickCount = 0
     private var lastClickTime: Long = 0
 
-    // Pembatasan Frekuensi Iklan Interstitial (Max 2x per 5 menit)
-    private var adShowCountInWindow = 0
-    private var windowStartTime: Long = 0
-    private val FIVE_MINUTES_MS = 5 * 60 * 1000L
-
     private val BANNER_AD_UNIT_ID = "ca-app-pub-6983364109428063/6624153015"
     private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/5725646492"
     private val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6983364109428063/5534667709"
@@ -78,24 +73,14 @@ class MainActivity : AppCompatActivity() {
                 if (url.contains("ujiannet-id.blogspot.com")) {
                     val currentTime = System.currentTimeMillis()
 
-                    // Reset jendela waktu jika sudah melewati 5 menit
-                    if (currentTime - windowStartTime > FIVE_MINUTES_MS) {
-                        windowStartTime = currentTime
-                        adShowCountInWindow = 0
-                    }
-
                     // Menghindari double tap / spam klik cepat (< 1 detik)
                     if (currentTime - lastClickTime > 1000) {
                         lastClickTime = currentTime
                         postClickCount++
 
-                        // Tampilkan iklan HANYA jika:
-                        // 1. Klik kelipatan genap
-                        // 2. Iklan dalam 5 menit terakhir masih < 2 kali
-                        // 3. Iklan Interstitial siap ditayangkan
-                        if (postClickCount % 2 == 0 && adShowCountInWindow < 2 && interstitialAd != null) {
+                        // Menampilkan iklan jika klik kelipatan genap DAN iklan berhasil dimuat dari server AdMob
+                        if (postClickCount % 2 == 0 && interstitialAd != null) {
                             showInterstitialAd {
-                                adShowCountInWindow++
                                 view?.loadUrl(url)
                             }
                             return true
@@ -176,7 +161,7 @@ class MainActivity : AppCompatActivity() {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     interstitialAd = null
-                    loadInterstitialAd()
+                    loadInterstitialAd() // Server AdMob otomatis menolak jika kuota di dashboard habis
                     onAdDismissed()
                 }
 
