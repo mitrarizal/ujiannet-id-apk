@@ -30,7 +30,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var adContainerView: FrameLayout
-    private var bannerAdView: AdView? = null // Diperbaiki dari adView menjadi bannerAdView
+    private var bannerAdView: AdView? = null
 
     private var rewardedAd: RewardedAd? = null
     private var interstitialAd: InterstitialAd? = null
@@ -171,7 +171,7 @@ class MainActivity : AppCompatActivity() {
         val adView = AdView(this)
         adView.adUnitId = BANNER_AD_UNIT_ID
         adView.setAdSize(getAdSize())
-        this.bannerAdView = adView // Menggunakan bannerAdView
+        this.bannerAdView = adView
 
         adContainerView.removeAllViews()
         adContainerView.addView(adView)
@@ -310,17 +310,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        bannerAdView?.pause() // Menggunakan bannerAdView
+        bannerAdView?.pause()
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
-        bannerAdView?.resume() // Menggunakan bannerAdView
+        bannerAdView?.resume()
     }
 
     override fun onDestroy() {
-        bannerAdView?.destroy() // Menggunakan bannerAdView
+        bannerAdView?.destroy()
         webView.destroy()
         super.onDestroy()
     }
