@@ -1,4 +1,4 @@
-package com.ujiannet.app
+package com.ujiannet.id
 
 import android.app.Application
 import com.google.android.gms.ads.MobileAds
