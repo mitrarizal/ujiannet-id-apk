@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.ujiannet.id"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.ujiannet.id"
