@@ -11,8 +11,8 @@ android {
         applicationId = "com.ujiannet.id"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 8 // Dinaikkan dari 7 agar Play Console menerima file rilis baru
+        versionName = "1.0.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,7 +37,12 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = false
+            isMinifyEnabled = true // Mengaktifkan optimasi R8 & obfuscation
+            isShrinkResources = true // Mengurangi ukuran file resource yang tidak terpakai
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("release")
         }
     }
