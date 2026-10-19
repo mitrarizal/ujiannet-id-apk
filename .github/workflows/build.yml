@@ -1,4 +1,4 @@
-name: Build Android App (APK)
+name: Build Android App Bundle (AAB)
 
 on:
   push:
@@ -35,15 +35,15 @@ jobs:
               f.write(base64.b64decode(raw))
           "
 
-      - name: Build Release APK
+      - name: Build Release AAB
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle assembleRelease
+        run: gradle bundleRelease
 
-      - name: Upload Signed APK
+      - name: Upload Signed AAB
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-signed
-          path: app/build/outputs/apk/release/app-release.apk
+          name: app-release-bundle
+          path: app/build/outputs/bundle/release/app-release.aab
