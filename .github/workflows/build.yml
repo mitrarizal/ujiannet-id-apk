@@ -1,41 +1,42 @@
-name: Generate Permanent Keystore
+name: Build Android App (APK)
 
 on:
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  generate:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Generate Keystore, Base64, and PEM Certificate
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Decode Fixed Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.jks
+
+      - name: Build Release APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          keytool -genkeypair -v \
-            -keystore release.jks \
-            -storetype JKS \
-            -alias "$KEY_ALIAS" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -keypass "$KEY_PASSWORD" \
-            -dname "CN=UjianNet, OU=App, O=UjianNet, L=Jakarta, ST=Jakarta, C=ID"
+        run: gradle assembleRelease
 
-          base64 -w 0 release.jks > keystore_base64.txt
-
-          keytool -exportcert -alias "$KEY_ALIAS" \
-            -keystore release.jks \
-            -storepass "$KEYSTORE_PASSWORD" \
-            -rfc -file upload_certificate.pem
-
-      - name: Upload Keystore Artifacts
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: permanent-keystore-files
-          path: |
-            release.jks
-            keystore_base64.txt
-            upload_certificate.pem
+          name: app-release-signed
+          path: app/build/outputs/apk/release/app-release.apk
