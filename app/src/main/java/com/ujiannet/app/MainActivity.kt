@@ -1,4 +1,4 @@
-package com.ujiannet.app
+package com.ujiannet.id
 
 import android.content.Context
 import android.content.Intent
