@@ -24,18 +24,12 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Decode Keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/keystore.jks
-
-      - name: Create google-services.json
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: printf "%s" "$GOOGLE_SERVICES_JSON" > app/google-services.json
+      - name: Decode Fixed Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.jks
 
       - name: Build Release APK
         env:
-          GRADLE_OPTS: "-Xmx3072m -XX:MaxMetaspaceSize=512m"
-          KEYSTORE_FILE_PATH: "keystore.jks"
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -44,5 +38,5 @@ jobs:
       - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: app-release-signed
+          path: app/build/outputs/apk/release/app-release.apk
