@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.ujiannet.app"
+    namespace = "com.ujiannet.id"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.ujiannet.app"
+        applicationId = "com.ujiannet.id"
         minSdk = 24
         targetSdk = 34
         versionCode = 7
