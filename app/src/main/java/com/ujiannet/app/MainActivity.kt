@@ -55,9 +55,9 @@ class MainActivity : AppCompatActivity() {
     private var postClickCount = 0
     private var lastClickTime: Long = 0
 
-    private val BANNER_AD_UNIT_ID = "ca-app-pub-6983364109428063/6624153015"
-    private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/5725646492"
-    private val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6983364109428063/5534667709"
+    private val BANNER_AD_UNIT_ID = "ca-app-pub-6983364109428063/7392901632"
+    private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/1834373062"
+    private val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6983364109428063/6079819961"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
