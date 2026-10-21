@@ -113,12 +113,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Setup Network Callback untuk memantau koneksi secara realtime
+        // Setup Network Callback (DIPERBAIKI: Tidak memuat ulang URL utama secara paksa agar sesi ujian aman)
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 runOnUiThread {
                     offlineDialog?.dismiss()
-                    webView.loadUrl("https://ujiannet-id.blogspot.com/")
                 }
             }
 
@@ -388,7 +387,6 @@ class MainActivity : AppCompatActivity() {
             ad.show(this@MainActivity) { _ ->
                 hasEarnedReward = true
             }
-        } else {
         }
     }
 
