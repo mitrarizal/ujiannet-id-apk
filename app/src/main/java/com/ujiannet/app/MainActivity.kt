@@ -10,7 +10,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowInsets
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -74,19 +76,32 @@ class MainActivity : AppCompatActivity() {
             loadInterstitialAd()
         }
 
-        // Pengaturan WebView yang stabil untuk AAB & Sesi Ujian
+        // Pengaturan WebView yang stabil untuk AAB, Sesi Ujian, & Iframe Apps Script
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.settings.databaseEnabled = true
         webView.settings.loadsImagesAutomatically = true
         webView.settings.setSupportZoom(true)
+        webView.settings.javaScriptCanOpenWindowsAutomatically = true // Penting jika iframe memicu popup/window baru
+        webView.settings.setSupportMultipleWindows(true)
+
+        // IZINKAN COOKIE PIHAK KETIGA UNTUK IFRAME APPS SCRIPT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            val cookieManager = CookieManager.getInstance()
+            cookieManager.setAcceptCookie(true)
+            cookieManager.setAcceptThirdPartyCookies(webView, true)
+        }
+
+        // TAMBAHKAN WebChromeClient AGAR IFRAME & PENGAMBILAN DATA BERJALAN NORMAL
+        webView.webChromeClient = WebChromeClient()
 
         webView.webViewClient = object : WebViewClient() {
 
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
 
-                if (url.contains("ujiannet-id.blogspot.com")) {
+                // Izinkan domain utama dan domain Google Apps Script agar tidak terblokir
+                if (url.contains("ujiannet-id.blogspot.com") || url.contains("script.google.com")) {
                     val currentTime = System.currentTimeMillis()
 
                     // Menghindari double tap / spam klik cepat (< 1 detik)
@@ -102,7 +117,18 @@ class MainActivity : AppCompatActivity() {
                             return true
                         }
                     }
+                    return false
                 }
+                
+                // Jika membuka tautan di luar domain ujian (misal download file)
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    startActivity(intent)
+                    return true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
                 return false
             }
 
@@ -393,6 +419,11 @@ class MainActivity : AppCompatActivity() {
                 hasEarnedReward = true
             }
         }
+    }
+
+    // Fungsi penting untuk menangani jendela popup / iframe tambahan dari Apps Script
+    inner class ExamWebChromeClient : WebChromeClient() {
+        // Jika skrip ujian membutuhkan dukungan window/popup tambahan
     }
 
     private fun notifyJsRewardEarned() {
