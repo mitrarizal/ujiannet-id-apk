@@ -82,8 +82,8 @@ class MainActivity : AppCompatActivity() {
         webView.settings.databaseEnabled = true
         webView.settings.loadsImagesAutomatically = true
         webView.settings.setSupportZoom(true)
-        webView.settings.javaScriptCanOpenWindowsAutomatically = true // Penting jika iframe memicu popup/window baru
-        webView.settings.setSupportMultipleWindows(true)
+        webView.settings.javaScriptCanOpenWindowsAutomatically = true
+        webView.settings.setSupportMultipleWindows(false)
 
         // IZINKAN COOKIE PIHAK KETIGA UNTUK IFRAME APPS SCRIPT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
             cookieManager.setAcceptThirdPartyCookies(webView, true)
         }
 
-        // TAMBAHKAN WebChromeClient AGAR IFRAME & PENGAMBILAN DATA BERJALAN NORMAL
+        // WEBCHROMECLIENT STANDARD
         webView.webChromeClient = WebChromeClient()
 
         webView.webViewClient = object : WebViewClient() {
@@ -100,8 +100,13 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
 
-                // Izinkan domain utama dan domain Google Apps Script agar tidak terblokir
-                if (url.contains("ujiannet-id.blogspot.com") || url.contains("script.google.com")) {
+                // 1. JIKA INI HALAMAN UJIAN (Google Apps Script), biarkan berjalan murni tanpa iklan & tanpa loadUrl paksa
+                if (url.contains("script.google.com")) {
+                    return false
+                }
+
+                // 2. Jika ini halaman blog utama untuk navigasi artikel/menu
+                if (url.contains("ujiannet-id.blogspot.com")) {
                     val currentTime = System.currentTimeMillis()
 
                     // Menghindari double tap / spam klik cepat (< 1 detik)
@@ -120,7 +125,7 @@ class MainActivity : AppCompatActivity() {
                     return false
                 }
                 
-                // Jika membuka tautan di luar domain ujian (misal download file)
+                // 3. Jika membuka tautan di luar domain ujian (misal download file)
                 try {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     startActivity(intent)
@@ -144,7 +149,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Setup Network Callback (Aman untuk AAB: Tidak melakukan loadUrl otomatis yang mereset sesi)
+        // Setup Network Callback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 runOnUiThread {
@@ -202,7 +207,7 @@ class MainActivity : AppCompatActivity() {
         view?.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
     }
 
-    // Fungsi Dialog Peringatan Pengunci (Tidak bisa ditutup user sembarangan)
+    // Fungsi Dialog Peringatan Pengunci
     private fun showOfflineDialog() {
         if (offlineDialog?.isShowing == true) return
 
@@ -419,11 +424,6 @@ class MainActivity : AppCompatActivity() {
                 hasEarnedReward = true
             }
         }
-    }
-
-    // Fungsi penting untuk menangani jendela popup / iframe tambahan dari Apps Script
-    inner class ExamWebChromeClient : WebChromeClient() {
-        // Jika skrip ujian membutuhkan dukungan window/popup tambahan
     }
 
     private fun notifyJsRewardEarned() {
