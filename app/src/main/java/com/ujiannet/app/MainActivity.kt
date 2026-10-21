@@ -74,8 +74,12 @@ class MainActivity : AppCompatActivity() {
             loadInterstitialAd()
         }
 
+        // Pengaturan WebView yang stabil untuk AAB & Sesi Ujian
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
+        webView.settings.databaseEnabled = true
+        webView.settings.loadsImagesAutomatically = true
+        webView.settings.setSupportZoom(true)
 
         webView.webViewClient = object : WebViewClient() {
 
@@ -107,13 +111,14 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
+                // Hanya tangani error jika ini halaman utama yang gagal dimuat total
                 if (request?.isForMainFrame == true) {
                     showOfflinePage(view)
                 }
             }
         }
 
-        // Setup Network Callback (DIPERBAIKI: Tidak memuat ulang URL utama secara paksa agar sesi ujian aman)
+        // Setup Network Callback (Aman untuk AAB: Tidak melakukan loadUrl otomatis yang mereset sesi)
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 runOnUiThread {
