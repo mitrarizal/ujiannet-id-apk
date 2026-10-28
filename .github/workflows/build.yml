@@ -24,6 +24,9 @@ jobs:
         with:
           gradle-version: '8.5'
 
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
       - name: Decode Keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/keystore.jks
 
@@ -38,7 +41,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle bundleRelease
+        run: ./gradlew bundleRelease
 
       - name: Upload Signed AAB
         uses: actions/upload-artifact@v4
