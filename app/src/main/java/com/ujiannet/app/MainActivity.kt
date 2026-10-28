@@ -9,7 +9,7 @@ import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.WindowInsets
+import android.view.View
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -17,20 +17,24 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdLoader
 import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.AdSize
-import com.google.android.gms.ads.AdView
-import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.google.android.gms.ads.nativead.NativeAd
+import com.google.android.gms.ads.nativead.NativeAdView
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 
@@ -38,7 +42,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var adContainerView: FrameLayout
-    private var bannerAdView: AdView? = null
 
     private var rewardedAd: RewardedAd? = null
     private var interstitialAd: InterstitialAd? = null
@@ -57,7 +60,7 @@ class MainActivity : AppCompatActivity() {
     private var postClickCount = 0
     private var lastClickTime: Long = 0
 
-    private val BANNER_AD_UNIT_ID = "ca-app-pub-6983364109428063/7392901632"
+    private val NATIVE_AD_UNIT_ID = "ca-app-pub-6983364109428063/2345007949"
     private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/1834373062"
     private val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6983364109428063/6079819961"
 
@@ -71,7 +74,7 @@ class MainActivity : AppCompatActivity() {
 
         // INISIALISASI ADMOB
         MobileAds.initialize(this@MainActivity) {
-            loadBannerAd()
+            loadNativeAd()
             loadRewardedAd()
             loadInterstitialAd()
         }
@@ -239,6 +242,57 @@ class MainActivity : AppCompatActivity() {
                 capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
     }
 
+    // LOGIKA NATIVE ADVANCED AD
+    private fun loadNativeAd() {
+        val adLoader = AdLoader.Builder(this, NATIVE_AD_UNIT_ID)
+            .forNativeAd { nativeAd ->
+                val adView = layoutInflater.inflate(R.layout.my_native_ad_view, null) as NativeAdView
+                populateNativeAdView(nativeAd, adView)
+                adContainerView.removeAllViews()
+                adContainerView.addView(adView)
+            }
+            .withAdListener(object : com.google.android.gms.ads.AdListener() {
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    // Tangani jika iklan gagal dimuat
+                }
+            })
+            .build()
+
+        adLoader.loadAd(AdRequest.Builder().build())
+    }
+
+    private fun populateNativeAdView(nativeAd: NativeAd, adView: NativeAdView) {
+        adView.headlineView = adView.findViewById(R.id.ad_headline)
+        adView.bodyView = adView.findViewById(R.id.ad_body)
+        adView.callToActionView = adView.findViewById(R.id.ad_call_to_action)
+        adView.iconView = adView.findViewById(R.id.ad_app_icon)
+
+        (adView.headlineView as TextView).text = nativeAd.headline
+        
+        if (nativeAd.body == null) {
+            adView.bodyView?.visibility = View.INVISIBLE
+        } else {
+            adView.bodyView?.visibility = View.VISIBLE
+            (adView.bodyView as TextView).text = nativeAd.body
+        }
+
+        if (nativeAd.callToAction == null) {
+            adView.callToActionView?.visibility = View.INVISIBLE
+        } else {
+            adView.callToActionView?.visibility = View.VISIBLE
+            (adView.callToActionView as Button).text = nativeAd.callToAction
+        }
+
+        if (nativeAd.icon == null) {
+            adView.iconView?.visibility = View.GONE
+        } else {
+            (adView.iconView as ImageView).setImageDrawable(nativeAd.icon?.drawable)
+            adView.iconView?.visibility = View.VISIBLE
+        }
+
+        adView.setNativeAd(nativeAd)
+    }
+
     // LOGIKA IKLAN INTERSTITIAL
     private fun loadInterstitialAd() {
         if (isInterstitialLoading || interstitialAd != null) return
@@ -283,40 +337,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             onAdDismissed()
         }
-    }
-
-    // LOGIKA ADAPTIVE BANNER
-    private fun loadBannerAd() {
-        val adView = AdView(this)
-        adView.adUnitId = BANNER_AD_UNIT_ID
-        adView.setAdSize(getAdSize())
-        this.bannerAdView = adView
-
-        adContainerView.removeAllViews()
-        adContainerView.addView(adView)
-
-        val adRequest = AdRequest.Builder().build()
-        adView.loadAd(adRequest)
-    }
-
-    private fun getAdSize(): AdSize {
-        val displayMetrics = resources.displayMetrics
-        var adWidthPixels = displayMetrics.widthPixels
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val windowMetrics = windowManager.currentWindowMetrics
-            val insets = windowMetrics.windowInsets
-                .getInsetsIgnoringVisibility(WindowInsets.Type.systemBars())
-            val calculatedWidth = windowMetrics.bounds.width() - insets.left - insets.right
-            if (calculatedWidth > 0) {
-                adWidthPixels = calculatedWidth
-            }
-        }
-
-        val density = displayMetrics.density
-        val adWidth = if (density > 0) (adWidthPixels / density).toInt() else 320
-
-        return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(this, adWidth)
     }
 
     // INTERFACE JAVASCRIPT
@@ -443,7 +463,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        bannerAdView?.pause()
         try {
             connectivityManager.unregisterNetworkCallback(networkCallback)
         } catch (e: Exception) {
@@ -454,7 +473,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        bannerAdView?.resume()
         try {
             val networkRequest = NetworkRequest.Builder()
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -471,7 +489,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        bannerAdView?.destroy()
         webView.destroy()
         super.onDestroy()
     }
