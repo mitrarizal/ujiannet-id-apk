@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android") version "1.9.22"
     id("com.google.gms.google-services")
 }
 
@@ -11,8 +12,8 @@ android {
         applicationId = "com.ujiannet.id"
         minSdk = 24
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.0.11"
+        versionCode = 13
+        versionName = "1.0.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -22,7 +23,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-        signingConfigs {
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    signingConfigs {
         create("release") {
             val keystorePath = System.getenv("KEYSTORE_FILE_PATH") ?: "release.jks"
             storeFile = file(keystorePath)
