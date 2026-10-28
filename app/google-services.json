@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "120132236547",
+    "firebase_url": "https://chat-ujiannet-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "chat-ujiannet",
+    "storage_bucket": "chat-ujiannet.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:120132236547:android:15129318526ff0f1e8a536",
+        "android_client_info": {
+          "package_name": "com.ujiannet.id"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDzcH9gdKvulifZMQYpEVgawKeZc6nZx9k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
