@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-id("com.google.gms.google-services")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -12,7 +12,7 @@ android {
         applicationId = "com.ujiannet.id"
         minSdk = 24
         targetSdk = 36
-        versionCode = 12 // Dinaikkan dari 7 agar Play Console menerima file rilis baru
+        versionCode = 12 // Sudah dinaikkan dengan benar
         versionName = "1.0.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -38,8 +38,8 @@ android {
 
     buildTypes {
         getByName("release") {
-            isMinifyEnabled = true // Mengaktifkan optimasi R8 & obfuscation
-            isShrinkResources = true // Mengurangi ukuran file resource yang tidak terpakai
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -53,8 +53,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("com.google.android.gms:play-services-ads:23.0.0")
-}
-// Firebase BoM & Analytics (Disesuaikan ke format Kotlin DSL)
+    
+    // Firebase BoM & Analytics (Dipindahkan ke DALAM blok dependencies)
     implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
     implementation("com.google.firebase:firebase-analytics")
 }
