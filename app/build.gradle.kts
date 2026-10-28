@@ -11,8 +11,8 @@ android {
         applicationId = "com.ujiannet.id"
         minSdk = 24
         targetSdk = 36
-        versionCode = 10 // Dinaikkan dari 7 agar Play Console menerima file rilis baru
-        versionName = "1.0.9"
+        versionCode = 11 // Dinaikkan dari 7 agar Play Console menerima file rilis baru
+        versionName = "1.0.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
