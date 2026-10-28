@@ -22,9 +22,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    signingConfigs {
+        signingConfigs {
         create("release") {
-            storeFile = file("release.jks")
+            val keystorePath = System.getenv("KEYSTORE_FILE_PATH") ?: "release.jks"
+            storeFile = file(keystorePath)
             storePassword = System.getenv("KEYSTORE_PASSWORD")
             keyAlias = System.getenv("KEY_ALIAS")
             keyPassword = System.getenv("KEY_PASSWORD")
