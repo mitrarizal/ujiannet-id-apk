@@ -117,12 +117,16 @@ class MainActivity : AppCompatActivity() {
                         lastClickTime = currentTime
                         postClickCount++
 
-                        // Menampilkan iklan jika klik kelipatan genap DAN iklan berhasil dimuat dari server AdMob
-                        if (postClickCount % 2 == 0 && interstitialAd != null) {
-                            showInterstitialAd {
-                                view?.loadUrl(url)
+                        // Menampilkan iklan jika klik kelipatan genap
+                        if (postClickCount % 2 == 0) {
+                            if (interstitialAd != null) {
+                                showInterstitialAd {
+                                    view?.loadUrl(url)
+                                }
+                                return true
+                            } else {
+                                loadInterstitialAd()
                             }
-                            return true
                         }
                     }
                     return false
@@ -145,7 +149,6 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
-                // Hanya tangani error jika ini halaman utama yang gagal dimuat total
                 if (request?.isForMainFrame == true) {
                     showOfflinePage(view)
                 }
@@ -252,9 +255,7 @@ class MainActivity : AppCompatActivity() {
                 adContainerView.addView(adView)
             }
             .withAdListener(object : com.google.android.gms.ads.AdListener() {
-                override fun onAdFailedToLoad(adError: LoadAdError) {
-                    // Tangani jika iklan gagal dimuat
-                }
+                override fun onAdFailedToLoad(adError: LoadAdError) {}
             })
             .build()
 
@@ -323,7 +324,7 @@ class MainActivity : AppCompatActivity() {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     interstitialAd = null
-                    loadInterstitialAd()
+                    loadInterstitialAd() // Memuat ulang iklan baru secara otomatis
                     onAdDismissed()
                 }
 
@@ -333,14 +334,40 @@ class MainActivity : AppCompatActivity() {
                     onAdDismissed()
                 }
             }
-            ad.show(this)
+            ad.show(this@MainActivity)
         } else {
+            loadInterstitialAd()
             onAdDismissed()
         }
     }
 
-    // INTERFACE JAVASCRIPT
+    // INTERFACE JAVASCRIPT (MEMUNGKINKAN WEB MEMANGGIL FUNGSI ANDROID)
     inner class WebAppInterface {
+
+        // Memenuhi panggilan dari Javascript: AndroidApp.showInterstitial()
+        @JavascriptInterface
+        fun showInterstitial() {
+            runOnUiThread {
+                if (interstitialAd != null) {
+                    showInterstitialAd {}
+                } else {
+                    loadInterstitialAd()
+                }
+            }
+        }
+
+        // Memenuhi panggilan alternatif Javascript: AndroidApp.panggilIklanInterstisial()
+        @JavascriptInterface
+        fun panggilIklanInterstisial() {
+            runOnUiThread {
+                if (interstitialAd != null) {
+                    showInterstitialAd {}
+                } else {
+                    loadInterstitialAd()
+                }
+            }
+        }
+
         @JavascriptInterface
         fun startDownloadProcess(url: String) {
             runOnUiThread {
