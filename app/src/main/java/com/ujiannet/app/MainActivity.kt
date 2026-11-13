@@ -15,6 +15,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -28,9 +29,9 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdLoader
 import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
-import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import com.google.android.gms.ads.nativead.NativeAd
@@ -72,21 +73,17 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-        // INISIALISASI ADMOB
-        MobileAds.initialize(this@MainActivity) {
-            loadNativeAd()
-            loadRewardedAd()
-            loadInterstitialAd()
+        // Pengaturan WebView dengan Cache Aktif agar Halaman Cepat Terbuka
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            cacheMode = WebSettings.LOAD_DEFAULT
+            loadsImagesAutomatically = true
+            setSupportZoom(true)
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(false)
         }
-
-        // Pengaturan WebView yang stabil untuk AAB, Sesi Ujian, & Iframe Apps Script
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.databaseEnabled = true
-        webView.settings.loadsImagesAutomatically = true
-        webView.settings.setSupportZoom(true)
-        webView.settings.javaScriptCanOpenWindowsAutomatically = true
-        webView.settings.setSupportMultipleWindows(false)
 
         // IZINKAN COOKIE PIHAK KETIGA UNTUK IFRAME APPS SCRIPT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -95,7 +92,6 @@ class MainActivity : AppCompatActivity() {
             cookieManager.setAcceptThirdPartyCookies(webView, true)
         }
 
-        // WEBCHROMECLIENT STANDARD
         webView.webChromeClient = WebChromeClient()
 
         webView.webViewClient = object : WebViewClient() {
@@ -103,7 +99,15 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
 
-                // 1. JIKA INI HALAMAN UJIAN (Google Apps Script), biarkan berjalan murni tanpa iklan & tanpa loadUrl paksa
+                // Abaikan subframe/iframe dan redirect internal (?m=1) agar tidak menahan navigasi
+                if (request.isForMainFrame == false) {
+                    return false
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && request.isRedirect) {
+                    return false
+                }
+
+                // 1. JIKA INI HALAMAN UJIAN (Google Apps Script), biarkan berjalan murni tanpa iklan
                 if (url.contains("script.google.com")) {
                     return false
                 }
@@ -120,9 +124,9 @@ class MainActivity : AppCompatActivity() {
                         // Menampilkan iklan jika klik kelipatan genap
                         if (postClickCount % 2 == 0) {
                             if (interstitialAd != null) {
-                                showInterstitialAd {
-                                    view?.loadUrl(url)
-                                }
+                                // Muat halaman di latar belakang SEKARANG agar langsung tampil saat iklan ditutup
+                                view?.loadUrl(url)
+                                showInterstitialAd {}
                                 return true
                             } else {
                                 loadInterstitialAd()
@@ -131,7 +135,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     return false
                 }
-                
+
                 // 3. Jika membuka tautan di luar domain ujian (misal download file)
                 try {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -149,11 +153,14 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
-                if (request?.isForMainFrame == true) {
+                // Pastikan hanya tampilkan halaman offline jika koneksi internet benar-benar terputus
+                if (request?.isForMainFrame == true && !isInternetAvailable()) {
                     showOfflinePage(view)
                 }
             }
         }
+
+        webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
 
         // Setup Network Callback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
@@ -171,15 +178,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Cek kondisi awal saat aplikasi dibuka
+        // 1. PRIORITASKAN MEMUAT HALAMAN WEB LEBIH DULU SEBELUM SDK IKLAN
         if (!isInternetAvailable()) {
             showOfflinePage(webView)
             showOfflineDialog()
         } else {
-            webView.loadUrl("https://ujiannet-id.blogspot.com/")
+            webView.loadUrl("https://ujiannet-id.blogspot.com/?m=1")
         }
 
-        webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
+        // 2. INISIALISASI ADMOB SETELAH WEBVIEW MULAI MEMUAT HALAMAN
+        MobileAds.initialize(this@MainActivity) {
+            loadNativeAd()
+            loadRewardedAd()
+            loadInterstitialAd()
+        }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -226,7 +238,7 @@ class MainActivity : AppCompatActivity() {
                 showOfflineDialog()
             } else {
                 dialog.dismiss()
-                webView.loadUrl("https://ujiannet-id.blogspot.com/")
+                webView.loadUrl("https://ujiannet-id.blogspot.com/?m=1")
             }
         }
         builder.setNegativeButton("Keluar") { _, _ -> finish() }
@@ -269,7 +281,7 @@ class MainActivity : AppCompatActivity() {
         adView.iconView = adView.findViewById(R.id.ad_app_icon)
 
         (adView.headlineView as TextView).text = nativeAd.headline
-        
+
         if (nativeAd.body == null) {
             adView.bodyView?.visibility = View.INVISIBLE
         } else {
@@ -324,7 +336,7 @@ class MainActivity : AppCompatActivity() {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                 override fun onAdDismissedFullScreenContent() {
                     interstitialAd = null
-                    loadInterstitialAd() // Memuat ulang iklan baru secara otomatis
+                    loadInterstitialAd()
                     onAdDismissed()
                 }
 
@@ -344,7 +356,6 @@ class MainActivity : AppCompatActivity() {
     // INTERFACE JAVASCRIPT (MEMUNGKINKAN WEB MEMANGGIL FUNGSI ANDROID)
     inner class WebAppInterface {
 
-        // Memenuhi panggilan dari Javascript: AndroidApp.showInterstitial()
         @JavascriptInterface
         fun showInterstitial() {
             runOnUiThread {
@@ -356,7 +367,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Memenuhi panggilan alternatif Javascript: AndroidApp.panggilIklanInterstisial()
         @JavascriptInterface
         fun panggilIklanInterstisial() {
             runOnUiThread {
