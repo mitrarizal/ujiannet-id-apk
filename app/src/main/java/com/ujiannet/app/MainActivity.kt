@@ -1,7 +1,9 @@
 package com.ujiannet.id
 
+import android.annotation.TargetApi
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -9,9 +11,12 @@ import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -44,16 +49,21 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var adContainerView: FrameLayout
 
+    private var currentNativeAd: NativeAd? = null
     private var rewardedAd: RewardedAd? = null
     private var interstitialAd: InterstitialAd? = null
     private var pendingDownloadUrl: String? = null
 
-    // Variabel untuk pemantau jaringan internet
+    // Variabel pemantau jaringan & pemulihan halaman otomatis
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var networkCallback: ConnectivityManager.NetworkCallback
     private var offlineDialog: AlertDialog? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var offlineRunnable: Runnable? = null
+    private var isShowingOfflinePage = false
+    private var lastValidUrl = "https://ujiannet-id.blogspot.com/?m=1"
 
-    // Variable Status Loading Iklan (Mencegah multiple request)
+    // Status Loading Iklan (Mencegah multiple request)
     private var isInterstitialLoading = false
     private var isRewardedLoading = false
 
@@ -61,6 +71,7 @@ class MainActivity : AppCompatActivity() {
     private var postClickCount = 0
     private var lastClickTime: Long = 0
 
+    private val HOME_URL = "https://ujiannet-id.blogspot.com/?m=1"
     private val NATIVE_AD_UNIT_ID = "ca-app-pub-6983364109428063/2345007949"
     private val REWARDED_AD_UNIT_ID = "ca-app-pub-6983364109428063/1834373062"
     private val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6983364109428063/6079819961"
@@ -73,7 +84,10 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-        // Pengaturan WebView dengan Cache Aktif agar Halaman Cepat Terbuka
+        // Sembunyikan wadah iklan sampai iklan native benar-benar siap ditampilkan
+        adContainerView.visibility = View.GONE
+
+        // Pengaturan WebView dengan Cache Aktif agar Halaman Cepat Terbuka di Semua Tipe HP
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -85,7 +99,7 @@ class MainActivity : AppCompatActivity() {
             setSupportMultipleWindows(false)
         }
 
-        // IZINKAN COOKIE PIHAK KETIGA UNTUK IFRAME APPS SCRIPT
+        // Izinkan cookie pihak ketiga untuk iframe & sesi login Apps Script
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             val cookieManager = CookieManager.getInstance()
             cookieManager.setAcceptCookie(true)
@@ -96,23 +110,44 @@ class MainActivity : AppCompatActivity() {
 
         webView.webViewClient = object : WebViewClient() {
 
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                if (url != null && url.startsWith("http")) {
+                    if (!url.contains("googleusercontent.com") && !url.contains("accounts.google.com")) {
+                        lastValidUrl = url
+                    }
+                    isShowingOfflinePage = false
+
+                    // Sembunyikan iklan native saat masuk ke lembar ujian CBT agar bebas gangguan & salah klik
+                    val isExamPage = url.contains("script.google.com") || url.contains("script.googleusercontent.com")
+                    if (isExamPage) {
+                        adContainerView.visibility = View.GONE
+                    } else if (currentNativeAd != null) {
+                        adContainerView.visibility = View.VISIBLE
+                    }
+                }
+            }
+
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
 
                 // Abaikan subframe/iframe dan redirect internal (?m=1) agar tidak menahan navigasi
-                if (request.isForMainFrame == false) {
+                if (!request.isForMainFrame) {
                     return false
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && request.isRedirect) {
                     return false
                 }
 
-                // 1. JIKA INI HALAMAN UJIAN (Google Apps Script), biarkan berjalan murni tanpa iklan
-                if (url.contains("script.google.com")) {
+                // 1. Halaman ujian Google Apps Script & sesi login Google berjalan murni di dalam aplikasi
+                if (url.contains("script.google.com") ||
+                    url.contains("script.googleusercontent.com") ||
+                    url.contains("accounts.google.com")
+                ) {
                     return false
                 }
 
-                // 2. Jika ini halaman blog utama untuk navigasi artikel/menu
+                // 2. Navigasi artikel/menu di blog utama
                 if (url.contains("ujiannet-id.blogspot.com")) {
                     val currentTime = System.currentTimeMillis()
 
@@ -121,10 +156,8 @@ class MainActivity : AppCompatActivity() {
                         lastClickTime = currentTime
                         postClickCount++
 
-                        // Menampilkan iklan jika klik kelipatan genap
                         if (postClickCount % 2 == 0) {
                             if (interstitialAd != null) {
-                                // Muat halaman di latar belakang SEKARANG agar langsung tampil saat iklan ditutup
                                 view?.loadUrl(url)
                                 showInterstitialAd {}
                                 return true
@@ -136,7 +169,7 @@ class MainActivity : AppCompatActivity() {
                     return false
                 }
 
-                // 3. Jika membuka tautan di luar domain ujian (misal download file)
+                // 3. Tautan eksternal (misal download file)
                 try {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     startActivity(intent)
@@ -153,45 +186,66 @@ class MainActivity : AppCompatActivity() {
                 request: WebResourceRequest?,
                 error: WebResourceError?
             ) {
-                // Pastikan hanya tampilkan halaman offline jika koneksi internet benar-benar terputus
                 if (request?.isForMainFrame == true && !isInternetAvailable()) {
                     showOfflinePage(view)
                 }
+            }
+
+            // Membangun ulang Activity jika proses renderer WebView dimatikan sistem pada HP RAM kecil
+            @TargetApi(Build.VERSION_CODES.O)
+            override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+                if (!isFinishing) {
+                    recreate()
+                }
+                return true
             }
         }
 
         webView.addJavascriptInterface(WebAppInterface(), "AndroidApp")
 
-        // Setup Network Callback
+        // Pemantau jaringan dengan jeda 2.5 detik agar tidak terganggu kedipan sinyal di kelas
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
+                offlineRunnable?.let { mainHandler.removeCallbacks(it) }
                 runOnUiThread {
                     offlineDialog?.dismiss()
+                    if (isShowingOfflinePage) {
+                        isShowingOfflinePage = false
+                        webView.loadUrl(lastValidUrl)
+                    }
                 }
             }
 
             override fun onLost(network: Network) {
-                runOnUiThread {
-                    showOfflinePage(webView)
-                    showOfflineDialog()
+                offlineRunnable?.let { mainHandler.removeCallbacks(it) }
+                offlineRunnable = Runnable {
+                    if (!isInternetAvailable() && !isFinishing) {
+                        showOfflinePage(webView)
+                        showOfflineDialog()
+                    }
                 }
+                mainHandler.postDelayed(offlineRunnable!!, 2500)
             }
         }
 
-        // 1. PRIORITASKAN MEMUAT HALAMAN WEB LEBIH DULU SEBELUM SDK IKLAN
+        // 1. Prioritaskan memuat halaman web lebih dulu
         if (!isInternetAvailable()) {
             showOfflinePage(webView)
             showOfflineDialog()
         } else {
-            webView.loadUrl("https://ujiannet-id.blogspot.com/?m=1")
+            webView.loadUrl(HOME_URL)
         }
 
-        // 2. INISIALISASI ADMOB SETELAH WEBVIEW MULAI MEMUAT HALAMAN
-        MobileAds.initialize(this@MainActivity) {
-            loadNativeAd()
-            loadRewardedAd()
-            loadInterstitialAd()
-        }
+        // 2. Muat SDK AdMob setelah WebView mulai merender halaman awal (jeda 800 ms)
+        mainHandler.postDelayed({
+            if (!isFinishing) {
+                MobileAds.initialize(this@MainActivity) {
+                    loadNativeAd()
+                    loadRewardedAd()
+                    loadInterstitialAd()
+                }
+            }
+        }, 800)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -204,8 +258,9 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Fungsi menampilkan halaman gambar offline
     private fun showOfflinePage(view: WebView?) {
+        isShowingOfflinePage = true
+        adContainerView.visibility = View.GONE
         val html = """
             <!DOCTYPE html>
             <html>
@@ -225,9 +280,8 @@ class MainActivity : AppCompatActivity() {
         view?.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
     }
 
-    // Fungsi Dialog Peringatan Pengunci
     private fun showOfflineDialog() {
-        if (offlineDialog?.isShowing == true) return
+        if (offlineDialog?.isShowing == true || isFinishing) return
 
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Koneksi Internet Terputus")
@@ -238,7 +292,8 @@ class MainActivity : AppCompatActivity() {
                 showOfflineDialog()
             } else {
                 dialog.dismiss()
-                webView.loadUrl("https://ujiannet-id.blogspot.com/?m=1")
+                isShowingOfflinePage = false
+                webView.loadUrl(lastValidUrl)
             }
         }
         builder.setNegativeButton("Keluar") { _, _ -> finish() }
@@ -248,7 +303,6 @@ class MainActivity : AppCompatActivity() {
         offlineDialog?.show()
     }
 
-    // Fungsi Pengecek Jaringan Fisik
     private fun isInternetAvailable(): Boolean {
         val network = connectivityManager.activeNetwork ?: return false
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
@@ -261,13 +315,29 @@ class MainActivity : AppCompatActivity() {
     private fun loadNativeAd() {
         val adLoader = AdLoader.Builder(this, NATIVE_AD_UNIT_ID)
             .forNativeAd { nativeAd ->
-                val adView = layoutInflater.inflate(R.layout.my_native_ad_view, null) as NativeAdView
+                if (isDestroyed) {
+                    nativeAd.destroy()
+                    return@forNativeAd
+                }
+                currentNativeAd?.destroy()
+                currentNativeAd = nativeAd
+
+                // Gunakan adContainerView sebagai parent agar margin & pembatas XML tetap terjaga
+                val adView = layoutInflater.inflate(R.layout.my_native_ad_view, adContainerView, false) as NativeAdView
                 populateNativeAdView(nativeAd, adView)
                 adContainerView.removeAllViews()
                 adContainerView.addView(adView)
+
+                val isExamPage = lastValidUrl.contains("script.google.com") || lastValidUrl.contains("script.googleusercontent.com")
+                if (!isShowingOfflinePage && !isExamPage) {
+                    adContainerView.visibility = View.VISIBLE
+                }
             }
             .withAdListener(object : com.google.android.gms.ads.AdListener() {
-                override fun onAdFailedToLoad(adError: LoadAdError) {}
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    adContainerView.removeAllViews()
+                    adContainerView.visibility = View.GONE
+                }
             })
             .build()
 
@@ -283,14 +353,14 @@ class MainActivity : AppCompatActivity() {
         (adView.headlineView as TextView).text = nativeAd.headline
 
         if (nativeAd.body == null) {
-            adView.bodyView?.visibility = View.INVISIBLE
+            adView.bodyView?.visibility = View.GONE
         } else {
             adView.bodyView?.visibility = View.VISIBLE
             (adView.bodyView as TextView).text = nativeAd.body
         }
 
         if (nativeAd.callToAction == null) {
-            adView.callToActionView?.visibility = View.INVISIBLE
+            adView.callToActionView?.visibility = View.GONE
         } else {
             adView.callToActionView?.visibility = View.VISIBLE
             (adView.callToActionView as Button).text = nativeAd.callToAction
@@ -353,7 +423,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // INTERFACE JAVASCRIPT (MEMUNGKINKAN WEB MEMANGGIL FUNGSI ANDROID)
+    // INTERFACE JAVASCRIPT
     inner class WebAppInterface {
 
         @JavascriptInterface
@@ -500,6 +570,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        webView.onPause()
+        offlineRunnable?.let { mainHandler.removeCallbacks(it) }
         try {
             connectivityManager.unregisterNetworkCallback(networkCallback)
         } catch (e: Exception) {
@@ -510,6 +582,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        webView.onResume()
         try {
             val networkRequest = NetworkRequest.Builder()
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -522,10 +595,19 @@ class MainActivity : AppCompatActivity() {
         if (!isInternetAvailable()) {
             showOfflinePage(webView)
             showOfflineDialog()
+        } else {
+            offlineDialog?.dismiss()
+            if (isShowingOfflinePage) {
+                isShowingOfflinePage = false
+                webView.loadUrl(lastValidUrl)
+            }
         }
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null)
+        adContainerView.removeAllViews()
+        currentNativeAd?.destroy()
         webView.destroy()
         super.onDestroy()
     }
