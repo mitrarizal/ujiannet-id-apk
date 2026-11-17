@@ -156,15 +156,16 @@ class MainActivity : AppCompatActivity() {
                         lastClickTime = currentTime
                         postClickCount++
 
-                        if (postClickCount % 2 == 0) {
-                            if (interstitialAd != null) {
-                                view?.loadUrl(url)
-                                showInterstitialAd {}
-                                return true
-                            } else {
-                                loadInterstitialAd()
-                            }
-                        }
+                      if (postClickCount % 2 == 0) {
+    if (interstitialAd != null) {
+        showInterstitialAd {
+            view?.loadUrl(url)
+        }
+        return true
+    } else {
+        loadInterstitialAd()
+    }
+}
                     }
                     return false
                 }
