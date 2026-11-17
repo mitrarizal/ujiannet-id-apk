@@ -9,13 +9,42 @@
         android:id="@+id/webView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_above="@id/adContainerView" />
+        android:layout_above="@id/bottomAdWrapper" />
 
-    <FrameLayout
-        android:id="@+id/adContainerView"
+    <!-- Wadah Luar Iklan dengan Pembatas, Latar Kontras, & Label -->
+    <LinearLayout
+        android:id="@+id/bottomAdWrapper"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:background="#E2E8F0" />
+        android:background="#E2E8F0"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <!-- Garis Pemisah Tegas Antara Konten dan Iklan -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:background="#2563EB" />
+
+        <!-- Label Penanda Iklan -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingTop="4dp"
+            android:paddingBottom="2dp"
+            android:text="Iklan"
+            android:textColor="#475569"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <!-- FrameLayout Target untuk AdView dari MainActivity -->
+        <FrameLayout
+            android:id="@+id/adContainerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="4dp" />
+
+    </LinearLayout>
 
 </RelativeLayout>
