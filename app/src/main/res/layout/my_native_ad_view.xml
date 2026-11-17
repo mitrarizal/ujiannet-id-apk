@@ -1,64 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.gms.ads.nativead.NativeAdView
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<com.google.android.gms.ads.nativead.NativeAdView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="8dp"
-    android:background="@drawable/bg_native_ad_card"
-    android:padding="10dp">
+    android:background="#E2E8F0">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Garis Pembatas Tegas Antara WebView dan Area Iklan -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:background="#2563EB" />
+
+        <!-- Baris Lencana Atribusi Wajib "Iklan" -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="28dp"
-            android:layout_marginBottom="6dp"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="2dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="#F59E0B"
+                android:background="#334155"
                 android:paddingStart="6dp"
                 android:paddingTop="1dp"
                 android:paddingEnd="6dp"
                 android:paddingBottom="1dp"
-                android:text="IKLAN"
-                android:textColor="#111827"
+                android:text="Iklan"
+                android:textColor="#FFFFFF"
                 android:textSize="10sp"
                 android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:text="Bersponsor"
-                android:textColor="#475569"
-                android:textSize="11sp" />
         </LinearLayout>
 
+        <!-- Konten Utama Native Ad -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="8dp">
 
             <ImageView
                 android:id="@+id/ad_app_icon"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:layout_marginEnd="8dp"
-                android:contentDescription="Ikon Iklan"
-                android:scaleType="centerCrop" />
+                android:adjustViewBounds="true"
+                android:contentDescription="Ikon Iklan" />
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -69,33 +73,31 @@
                     android:ellipsize="end"
                     android:maxLines="1"
                     android:textColor="#0F172A"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/ad_body"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
                     android:ellipsize="end"
                     android:maxLines="2"
                     android:textColor="#475569"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <Button
                 android:id="@+id/ad_call_to_action"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:backgroundTint="#0056B3"
-                android:minHeight="36dp"
+                android:layout_height="36dp"
+                android:backgroundTint="#2563EB"
+                android:minWidth="72dp"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
-
         </LinearLayout>
+
     </LinearLayout>
 </com.google.android.gms.ads.nativead.NativeAdView>
