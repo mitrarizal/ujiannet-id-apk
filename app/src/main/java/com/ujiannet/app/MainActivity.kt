@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
@@ -31,6 +32,8 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdLoader
 import com.google.android.gms.ads.AdRequest
@@ -61,11 +64,19 @@ class MainActivity : AppCompatActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var offlineRunnable: Runnable? = null
     private var isShowingOfflinePage = false
+    private var isKeyboardVisible = false
     private var lastValidUrl = "https://ujiannet-id.blogspot.com/?m=1"
 
     // Status Loading Iklan (Mencegah multiple request)
     private var isInterstitialLoading = false
     private var isRewardedLoading = false
+    private var isNativeAdLoading = false
+
+    // Pengaturan percobaan ulang (retry) iklan native saat gagal dimuat
+    private var nativeAdRetryCount = 0
+    private val MAX_AD_RETRY = 3
+    private val RETRY_DELAY_MS = 15000L
+    private val retryNativeAdRunnable = Runnable { loadNativeAd() }
 
     // Penghitung Klik & Jeda Waktu Klik Fisik
     private var postClickCount = 0
@@ -86,6 +97,17 @@ class MainActivity : AppCompatActivity() {
 
         // Sembunyikan wadah iklan sampai iklan native benar-benar siap ditampilkan
         adContainerView.visibility = View.GONE
+
+        // Sembunyikan iklan sementara saat keyboard muncul (misal saat mengetik di kolom pencarian)
+        ViewCompat.setOnApplyWindowInsetsListener(adContainerView) { v, insets ->
+            isKeyboardVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            if (isKeyboardVisible) {
+                v.setVisibility(View.GONE)
+            } else if (canShowNativeAd()) {
+                v.setVisibility(View.VISIBLE)
+            }
+            ViewCompat.onApplyWindowInsets(v, insets)
+        }
 
         // Pengaturan WebView dengan Cache Aktif agar Halaman Cepat Terbuka di Semua Tipe HP
         webView.settings.apply {
@@ -119,10 +141,9 @@ class MainActivity : AppCompatActivity() {
                     isShowingOfflinePage = false
 
                     // Sembunyikan iklan native saat masuk ke lembar ujian CBT agar bebas gangguan & salah klik
-                    val isExamPage = url.contains("script.google.com") || url.contains("script.googleusercontent.com")
-                    if (isExamPage) {
+                    if (isExamUrl(url)) {
                         adContainerView.visibility = View.GONE
-                    } else if (currentNativeAd != null) {
+                    } else if (canShowNativeAd()) {
                         adContainerView.visibility = View.VISIBLE
                     }
                 }
@@ -156,16 +177,16 @@ class MainActivity : AppCompatActivity() {
                         lastClickTime = currentTime
                         postClickCount++
 
-                      if (postClickCount % 2 == 0) {
-    if (interstitialAd != null) {
-        showInterstitialAd {
-            view?.loadUrl(url)
-        }
-        return true
-    } else {
-        loadInterstitialAd()
-    }
-}
+                        if (postClickCount % 2 == 0) {
+                            if (interstitialAd != null) {
+                                showInterstitialAd {
+                                    view?.loadUrl(url)
+                                }
+                                return true
+                            } else {
+                                loadInterstitialAd()
+                            }
+                        }
                     }
                     return false
                 }
@@ -214,6 +235,12 @@ class MainActivity : AppCompatActivity() {
                         isShowingOfflinePage = false
                         webView.loadUrl(lastValidUrl)
                     }
+                    if (canShowNativeAd()) {
+                        adContainerView.visibility = View.VISIBLE
+                    } else if (currentNativeAd == null && !isShowingOfflinePage) {
+                        nativeAdRetryCount = 0
+                        loadNativeAd()
+                    }
                 }
             }
 
@@ -221,6 +248,7 @@ class MainActivity : AppCompatActivity() {
                 offlineRunnable?.let { mainHandler.removeCallbacks(it) }
                 offlineRunnable = Runnable {
                     if (!isInternetAvailable() && !isFinishing) {
+                        mainHandler.removeCallbacks(retryNativeAdRunnable)
                         showOfflinePage(webView)
                         showOfflineDialog()
                     }
@@ -237,16 +265,20 @@ class MainActivity : AppCompatActivity() {
             webView.loadUrl(HOME_URL)
         }
 
-        // 2. Muat SDK AdMob setelah WebView mulai merender halaman awal (jeda 800 ms)
+        // 2. Muat SDK AdMob setelah WebView merender halaman awal; prioritaskan Native Ad lebih dulu
         mainHandler.postDelayed({
-            if (!isFinishing) {
+            if (!isFinishing && !isDestroyed) {
                 MobileAds.initialize(this@MainActivity) {
                     loadNativeAd()
-                    loadRewardedAd()
-                    loadInterstitialAd()
+                    mainHandler.postDelayed({
+                        if (!isFinishing && !isDestroyed) {
+                            loadInterstitialAd()
+                            loadRewardedAd()
+                        }
+                    }, 700)
                 }
             }
-        }, 800)
+        }, 1200)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -257,6 +289,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    private fun isExamUrl(url: String): Boolean {
+        return url.contains("script.google.com") || url.contains("script.googleusercontent.com")
+    }
+
+    private fun canShowNativeAd(): Boolean {
+        return currentNativeAd != null &&
+                !isShowingOfflinePage &&
+                !isKeyboardVisible &&
+                !isExamUrl(lastValidUrl)
     }
 
     private fun showOfflinePage(view: WebView?) {
@@ -295,6 +338,12 @@ class MainActivity : AppCompatActivity() {
                 dialog.dismiss()
                 isShowingOfflinePage = false
                 webView.loadUrl(lastValidUrl)
+                if (canShowNativeAd()) {
+                    adContainerView.visibility = View.VISIBLE
+                } else if (currentNativeAd == null) {
+                    nativeAdRetryCount = 0
+                    loadNativeAd()
+                }
             }
         }
         builder.setNegativeButton("Keluar") { _, _ -> finish() }
@@ -314,12 +363,19 @@ class MainActivity : AppCompatActivity() {
 
     // LOGIKA NATIVE ADVANCED AD
     private fun loadNativeAd() {
+        if (isFinishing || isDestroyed || isNativeAdLoading || !isInternetAvailable()) {
+            return
+        }
+        isNativeAdLoading = true
+
         val adLoader = AdLoader.Builder(this, NATIVE_AD_UNIT_ID)
             .forNativeAd { nativeAd ->
-                if (isDestroyed) {
+                isNativeAdLoading = false
+                if (isFinishing || isDestroyed) {
                     nativeAd.destroy()
                     return@forNativeAd
                 }
+                nativeAdRetryCount = 0
                 currentNativeAd?.destroy()
                 currentNativeAd = nativeAd
 
@@ -329,15 +385,25 @@ class MainActivity : AppCompatActivity() {
                 adContainerView.removeAllViews()
                 adContainerView.addView(adView)
 
-                val isExamPage = lastValidUrl.contains("script.google.com") || lastValidUrl.contains("script.googleusercontent.com")
-                if (!isShowingOfflinePage && !isExamPage) {
+                if (canShowNativeAd()) {
                     adContainerView.visibility = View.VISIBLE
                 }
             }
             .withAdListener(object : com.google.android.gms.ads.AdListener() {
                 override fun onAdFailedToLoad(adError: LoadAdError) {
+                    isNativeAdLoading = false
+                    Log.e(
+                        "ADMOB_NATIVE",
+                        "Gagal muat iklan native | Kode: ${adError.code} | Pesan: ${adError.message}"
+                    )
                     adContainerView.removeAllViews()
                     adContainerView.visibility = View.GONE
+
+                    if (nativeAdRetryCount < MAX_AD_RETRY && !isShowingOfflinePage) {
+                        nativeAdRetryCount++
+                        mainHandler.removeCallbacks(retryNativeAdRunnable)
+                        mainHandler.postDelayed(retryNativeAdRunnable, RETRY_DELAY_MS)
+                    }
                 }
             })
             .build()
@@ -351,26 +417,26 @@ class MainActivity : AppCompatActivity() {
         adView.callToActionView = adView.findViewById(R.id.ad_call_to_action)
         adView.iconView = adView.findViewById(R.id.ad_app_icon)
 
-        (adView.headlineView as TextView).text = nativeAd.headline
+        (adView.headlineView as? TextView)?.text = nativeAd.headline
 
         if (nativeAd.body == null) {
             adView.bodyView?.visibility = View.GONE
         } else {
             adView.bodyView?.visibility = View.VISIBLE
-            (adView.bodyView as TextView).text = nativeAd.body
+            (adView.bodyView as? TextView)?.text = nativeAd.body
         }
 
         if (nativeAd.callToAction == null) {
             adView.callToActionView?.visibility = View.GONE
         } else {
             adView.callToActionView?.visibility = View.VISIBLE
-            (adView.callToActionView as Button).text = nativeAd.callToAction
+            (adView.callToActionView as? Button)?.text = nativeAd.callToAction
         }
 
         if (nativeAd.icon == null) {
             adView.iconView?.visibility = View.GONE
         } else {
-            (adView.iconView as ImageView).setImageDrawable(nativeAd.icon?.drawable)
+            (adView.iconView as? ImageView)?.setImageDrawable(nativeAd.icon?.drawable)
             adView.iconView?.visibility = View.VISIBLE
         }
 
@@ -602,11 +668,18 @@ class MainActivity : AppCompatActivity() {
                 isShowingOfflinePage = false
                 webView.loadUrl(lastValidUrl)
             }
+            if (canShowNativeAd()) {
+                adContainerView.visibility = View.VISIBLE
+            } else if (currentNativeAd == null) {
+                nativeAdRetryCount = 0
+                loadNativeAd()
+            }
         }
     }
 
     override fun onDestroy() {
         mainHandler.removeCallbacksAndMessages(null)
+        offlineDialog?.dismiss()
         adContainerView.removeAllViews()
         currentNativeAd?.destroy()
         webView.destroy()
