@@ -34,10 +34,10 @@ import java.util.Date;
 public class AdManager implements DefaultLifecycleObserver {
 
     // Ganti dengan Unit ID Produksi AdMob Ujiannet-id sebelum rilis ke Google Play
-    private static final String AD_UNIT_BANNER = "ca-app-pub-3940256099942544/9214589741";
-    private static final String AD_UNIT_INTERSTITIAL = "ca-app-pub-3940256099942544/1033173712";
-    private static final String AD_UNIT_REWARDED = "ca-app-pub-3940256099942544/5224354917";
-    private static final String AD_UNIT_APP_OPEN = "ca-app-pub-3940256099942544/9257395921";
+    private static final String AD_UNIT_BANNER = "ca-app-pub-6983364109428063/7392901632";
+    private static final String AD_UNIT_INTERSTITIAL = "ca-app-pub-6983364109428063/6079819961";
+    private static final String AD_UNIT_REWARDED = "ca-app-pub-6983364109428063/1834373062";
+    private static final String AD_UNIT_APP_OPEN = "ca-app-pub-6983364109428063/7652300206";
 
     private final Activity activity;
     private final WebView webView;
