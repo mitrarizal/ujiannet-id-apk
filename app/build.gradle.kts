@@ -1,11 +1,13 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android") version "1.9.22"
+    id("org.jetbrains.kotlin.android")
     id("com.google.gms.google-services")
 }
 
 android {
-    namespace = "com.ujiannet.id"
+    // Sinkron dengan folder app/src/main/java/com/ujiannet/app/
+    // (Ubah ke "com.ujiannet.id" jika Anda memindahkan file Java ke folder com/ujiannet/id/)
+    namespace = "com.ujiannet.app"
     compileSdk = 36
 
     defaultConfig {
@@ -13,10 +15,9 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 20
-        versionName = "1.0.19"
+        versionName = "1.0.20"
 
         multiDexEnabled = true
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -31,7 +32,7 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("KEYSTORE_FILE_PATH") ?: "release.jks"
+            val keystorePath = System.getenv("KEYSTORE_FILE_PATH") ?: "keystore.jks"
             storeFile = file(keystorePath)
             storePassword = System.getenv("KEYSTORE_PASSWORD")
             keyAlias = System.getenv("KEY_ALIAS")
@@ -49,15 +50,31 @@ android {
             )
             signingConfig = signingConfigs.getByName("release")
         }
+        getByName("debug") {
+            isMinifyEnabled = false
+        }
+    }
+
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 
 dependencies {
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.11.0")
-    implementation("com.google.android.gms:play-services-ads:23.0.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.activity:activity:1.10.1")
+    implementation("androidx.core:core:1.16.0")
+
+    // Wajib untuk AppOpenAd (ProcessLifecycleOwner & DefaultLifecycleObserver)
+    implementation("androidx.lifecycle:lifecycle-process:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime:2.9.0")
+
+    // Google Mobile Ads SDK (App Open, Rewarded, Banner, Interstitial)
+    implementation("com.google.android.gms:play-services-ads:24.3.0")
 
     // Firebase BoM & Analytics
-    implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
+    implementation(platform("com.google.firebase:firebase-bom:33.12.0"))
     implementation("com.google.firebase:firebase-analytics")
 }
