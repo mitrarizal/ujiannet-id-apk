@@ -7,7 +7,7 @@ plugins {
 android {
     // Sinkron dengan folder app/src/main/java/com/ujiannet/app/
     // (Ubah ke "com.ujiannet.id" jika Anda memindahkan file Java ke folder com/ujiannet/id/)
-    namespace = "com.ujiannet.app"
+    namespace = "com.ujiannet.id"
     compileSdk = 36
 
     defaultConfig {
