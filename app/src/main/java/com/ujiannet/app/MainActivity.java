@@ -1,4 +1,4 @@
-package com.ujiannet.id;
+package com.ujiannet.app;
 
 import android.annotation.SuppressLint;
 import android.app.DownloadManager;
@@ -24,6 +24,8 @@ import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -48,6 +50,8 @@ public class MainActivity extends AppCompatActivity {
         webView = findViewById(R.id.game_webview);
         bannerContainer = findViewById(R.id.banner_ad_container);
 
+        applyEdgeToEdgeInsets();
+
         adManager = new AdManager(this, webView, bannerContainer);
 
         setupWebView();
@@ -58,6 +62,33 @@ public class MainActivity extends AppCompatActivity {
         } else {
             webView.loadUrl(BLOGGER_HOME_URL);
         }
+    }
+
+    /**
+     * Penanganan WindowInsets untuk targetSdk 36 (Android 15/16 Edge-to-Edge)
+     * agar kontainer Banner dan WebView tidak tertutup bilah navigasi sistem.
+     */
+    private void applyEdgeToEdgeInsets() {
+        View rootView = findViewById(android.R.id.content);
+        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
+            Insets systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+            Insets displayCutout = windowInsets.getInsets(WindowInsetsCompat.Type.displayCutout());
+
+            int leftInset = Math.max(systemBars.left, displayCutout.left);
+            int topInset = Math.max(systemBars.top, displayCutout.top);
+            int rightInset = Math.max(systemBars.right, displayCutout.right);
+            int bottomInset = systemBars.bottom;
+
+            if (webView != null) {
+                webView.setPadding(leftInset, topInset, rightInset, 0);
+            }
+
+            if (bannerContainer != null) {
+                bannerContainer.setPadding(leftInset, 0, rightInset, bottomInset);
+            }
+
+            return WindowInsetsCompat.CONSUMED;
+        });
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -85,18 +116,19 @@ public class MainActivity extends AppCompatActivity {
         webView.addJavascriptInterface(jsBridge, "AndroidAdMob");
         webView.addJavascriptInterface(jsBridge, "AndroidApp");
 
-        // Dukungan unduhan file langsung di WebView (PDF/DOCX/XLSX/ZIP)
+        // Dukungan unduhan berkas langsung di WebView (PDF/DOCX/XLSX/ZIP)
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
             try {
                 DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
                 request.setMimeType(mimeType);
                 String cookies = CookieManager.getInstance().getCookie(url);
-                request.addRequestHeader("cookie", cookies);
+                if (cookies != null) {
+                    request.addRequestHeader("cookie", cookies);
+                }
                 request.addRequestHeader("User-Agent", userAgent);
                 request.setDescription("Mengunduh berkas dari Ujiannet-id...");
                 String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
                 request.setTitle(fileName);
-                request.allowScanningByMediaScanner();
                 request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
                 request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
 
@@ -106,8 +138,9 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this, "Mengunduh: " + fileName, Toast.LENGTH_SHORT).show();
                 }
             } catch (Exception e) {
-                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                startActivity(browserIntent);
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                } catch (Exception ignored) {}
             }
         });
 
@@ -178,6 +211,7 @@ public class MainActivity extends AppCompatActivity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             enableImmersiveFullscreen();
+            ViewCompat.requestApplyInsets(findViewById(android.R.id.content));
         }
     }
 
