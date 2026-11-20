@@ -1,10 +1,13 @@
-package com.ujiannet.app;
+package com.ujiannet.id;
 
 import android.annotation.SuppressLint;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -14,6 +17,7 @@ import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -38,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout bannerContainer;
     private AdManager adManager;
     private boolean isInExamSession = false;
+    private boolean isShowingOfflinePage = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,17 +62,15 @@ public class MainActivity extends AppCompatActivity {
         setupWebView();
         setupBackNavigation();
 
-        if (savedInstanceState != null) {
+        if (!isNetworkAvailable()) {
+            showOfflinePage();
+        } else if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
         } else {
             webView.loadUrl(BLOGGER_HOME_URL);
         }
     }
 
-    /**
-     * Penanganan WindowInsets untuk targetSdk 36 (Android 15/16 Edge-to-Edge)
-     * agar kontainer Banner dan WebView tidak tertutup bilah navigasi sistem.
-     */
     private void applyEdgeToEdgeInsets() {
         View rootView = findViewById(android.R.id.content);
         ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
@@ -91,12 +94,44 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private boolean isNetworkAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return false;
+        Network network = cm.getActiveNetwork();
+        if (network == null) return false;
+        NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
+        return capabilities != null && (
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        );
+    }
+
+    private void showOfflinePage() {
+        isShowingOfflinePage = true;
+        String offlineHtml = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1.0'>"
+                + "<style>"
+                + "body{margin:0;padding:24px;background:#0F172A;color:#F8FAFC;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;text-align:center;}"
+                + "img{max-width:260px;width:75%;border-radius:16px;margin-bottom:20px;box-shadow:0 10px 25px rgba(0,0,0,0.4);}"
+                + "h2{margin:0 0 8px;font-size:20px;}"
+                + "p{margin:0 0 24px;font-size:14px;color:#94A3B8;line-height:1.5;}"
+                + "button{background:#0284C7;color:#fff;border:none;padding:12px 28px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;}"
+                + "</style></head><body>"
+                + "<img src='file:///android_asset/no_internet.png' alt='Tidak Ada Internet'/>"
+                + "<h2>Koneksi Internet Terputus</h2>"
+                + "<p>Periksa jaringan Wi-Fi atau data seluler Anda untuk mengakses Ujiannet ID.</p>"
+                + "<button onclick='AndroidAdMob.retryConnection()'>Coba Lagi</button>"
+                + "</body></html>";
+        webView.loadDataWithBaseURL("file:///android_asset/", offlineHtml, "text/html", "UTF-8", null);
+    }
+
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     private void setupWebView() {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(true);
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
@@ -116,7 +151,6 @@ public class MainActivity extends AppCompatActivity {
         webView.addJavascriptInterface(jsBridge, "AndroidAdMob");
         webView.addJavascriptInterface(jsBridge, "AndroidApp");
 
-        // Dukungan unduhan berkas langsung di WebView (PDF/DOCX/XLSX/ZIP)
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
             try {
                 DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
@@ -164,9 +198,17 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request.isForMainFrame() && !isNetworkAvailable()) {
+                    showOfflinePage();
+                }
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (url != null && !url.equals("about:blank")) {
+                if (url != null && !url.equals("about:blank") && !url.startsWith("file:///android_asset/") && !isShowingOfflinePage) {
                     adManager.onContentReady();
                 }
                 int bannerDp = adManager.getBannerHeightDp();
@@ -185,7 +227,7 @@ public class MainActivity extends AppCompatActivity {
             public void handleOnBackPressed() {
                 if (isInExamSession && webView != null) {
                     webView.evaluateJavascript("if(typeof confirmQuitLevel==='function'){confirmQuitLevel();}", null);
-                } else if (webView != null && webView.canGoBack()) {
+                } else if (webView != null && webView.canGoBack() && !isShowingOfflinePage) {
                     webView.goBack();
                 } else {
                     finish();
@@ -218,7 +260,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        if (webView != null) {
+        if (webView != null && !isShowingOfflinePage) {
             webView.saveState(outState);
         }
     }
@@ -251,6 +293,18 @@ public class MainActivity extends AppCompatActivity {
      * Jembatan metode JavaScript yang dipanggil dari Blogger (ujiannet-id.blogspot.com)
      */
     private class WebAppAdMobInterface {
+
+        @JavascriptInterface
+        public void retryConnection() {
+            runOnUiThread(() -> {
+                if (isNetworkAvailable()) {
+                    isShowingOfflinePage = false;
+                    webView.loadUrl(BLOGGER_HOME_URL);
+                } else {
+                    Toast.makeText(MainActivity.this, "Masih belum ada koneksi internet", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
 
         @JavascriptInterface
         public void configureFamiliesPolicy(boolean childDirected, String maxAdContentRating) {
