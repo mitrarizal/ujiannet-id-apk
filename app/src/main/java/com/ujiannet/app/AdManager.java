@@ -11,6 +11,7 @@ import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.lifecycle.DefaultLifecycleObserver;
+import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.ProcessLifecycleOwner;
 
@@ -33,16 +34,21 @@ import java.util.Date;
 
 public class AdManager implements DefaultLifecycleObserver {
 
-    // Ganti dengan Unit ID Produksi AdMob Ujiannet-id sebelum rilis ke Google Play
+    // Unit ID Produksi AdMob UjianNet-ID
     private static final String AD_UNIT_BANNER = "ca-app-pub-6983364109428063/7392901632";
     private static final String AD_UNIT_INTERSTITIAL = "ca-app-pub-6983364109428063/6079819961";
     private static final String AD_UNIT_REWARDED = "ca-app-pub-6983364109428063/1834373062";
     private static final String AD_UNIT_APP_OPEN = "ca-app-pub-6983364109428063/7652300206";
 
+    private static final long COLD_START_TIMEOUT_MS = 5000L;
+    private static final long FULLSCREEN_AD_COOLDOWN_MS = 5000L;
+    private static final long BANNER_RETRY_DELAY_MS = 15000L;
+
     private final Activity activity;
     private final WebView webView;
     private final FrameLayout bannerContainer;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final long appLaunchTimeMs;
 
     private AdView bannerAdView;
     private InterstitialAd interstitialAd;
@@ -50,12 +56,19 @@ public class AdManager implements DefaultLifecycleObserver {
     private AppOpenAd appOpenAd;
 
     private boolean isInitialized = false;
+    private boolean isAdIdInitialized = false;
     private boolean isContentReady = false;
     private boolean isExamOrGameActive = false;
     private boolean isShowingFullScreenAd = false;
     private boolean isLoadingAppOpen = false;
+    private boolean isBannerLoading = false;
+    private boolean hasShownColdStartAd = false;
+
     private long appOpenLoadTimeMs = 0L;
+    private long lastFullScreenDismissedMs = 0L;
     private int lastReportedBannerHeightDp = 0;
+
+    private final Runnable bannerRetryRunnable = this::loadAdaptiveBanner;
 
     public AdManager(@NonNull Activity activity,
                      @NonNull WebView webView,
@@ -63,13 +76,14 @@ public class AdManager implements DefaultLifecycleObserver {
         this.activity = activity;
         this.webView = webView;
         this.bannerContainer = bannerContainer;
+        this.appLaunchTimeMs = System.currentTimeMillis();
 
         ProcessLifecycleOwner.get().getLifecycle().addObserver(this);
         initMobileAds(false, RequestConfiguration.MAX_AD_CONTENT_RATING_PG);
     }
 
     /**
-     * Inisialisasi Google Mobile Ads SDK.
+     * Inisialisasi Google Mobile Ads SDK & sinkronisasi status AD_ID ke WebView.
      */
     public void initMobileAds(boolean childDirected, @NonNull String maxRating) {
         int childTag = childDirected
@@ -92,10 +106,13 @@ public class AdManager implements DefaultLifecycleObserver {
             isInitialized = true;
             MobileAds.initialize(activity.getApplicationContext(), initializationStatus -> {
                 mainHandler.post(() -> {
+                    isAdIdInitialized = true;
+                    notifyBridgeReadyToWeb();
+
+                    loadAppOpenAd();
                     loadInterstitialAd();
                     loadRewardedAd();
-                    loadAppOpenAd();
-                    if (isContentReady) {
+                    if (isContentReady && bannerAdView == null && !isBannerLoading) {
                         loadAdaptiveBanner();
                     }
                 });
@@ -103,25 +120,45 @@ public class AdManager implements DefaultLifecycleObserver {
         }
     }
 
+    public boolean isAdIdReady() {
+        return isAdIdInitialized;
+    }
+
+    private void notifyBridgeReadyToWeb() {
+        evaluateJs(
+            "if(window.onAdIdReady){window.onAdIdReady('', false);}" +
+            "if(window.onAdMobBridgeReady){window.onAdMobBridgeReady();}"
+        );
+    }
+
     /**
-     * Dipanggil saat halaman https://ujiannet-id.blogspot.com/?m=1 selesai dimuat.
+     * Dipanggil dari JavascriptInterface onContentLoaded() saat halaman Blogspot siap.
      */
     public void onContentReady() {
         mainHandler.post(() -> {
-            if (isContentReady) {
+            if (!isContentReady) {
+                isContentReady = true;
+                notifyBridgeReadyToWeb();
+            } else {
                 syncBannerHeightToWeb(lastReportedBannerHeightDp);
-                return;
+                tryShowColdStartAppOpenAd();
             }
-            isContentReady = true;
-            loadAdaptiveBanner();
+
+            if (isInitialized && bannerAdView == null && !isBannerLoading) {
+                loadAdaptiveBanner();
+            }
             if (interstitialAd == null) loadInterstitialAd();
             if (rewardedAd == null) loadRewardedAd();
-            if (appOpenAd == null) loadAppOpenAd();
+            if (appOpenAd == null) {
+                loadAppOpenAd();
+            } else {
+                tryShowColdStartAppOpenAd();
+            }
         });
     }
 
     /**
-     * Mengunci iklan App Open agar tidak muncul saat pengguna sedang mengerjakan soal ujian.
+     * Mengunci iklan App Open agar tidak muncul saat pengguna sedang mengerjakan soal ujian CBT.
      */
     public void setExamActive(boolean active) {
         mainHandler.post(() -> this.isExamOrGameActive = active);
@@ -132,12 +169,24 @@ public class AdManager implements DefaultLifecycleObserver {
     }
 
     // =========================================================================
-    // 1. ADAPTIVE BANNER AD
+    // 1. ADAPTIVE BANNER AD (DENGAN AUTO-RETRY & ANTI-TABRAKAN)
     // =========================================================================
     public void loadAdaptiveBanner() {
-        if (activity.isFinishing() || activity.isDestroyed()) return;
+        if (activity.isFinishing() || activity.isDestroyed() || !isInitialized || isBannerLoading) {
+            return;
+        }
 
+        mainHandler.removeCallbacks(bannerRetryRunnable);
+        isBannerLoading = true;
+
+        bannerContainer.setVisibility(View.VISIBLE);
         bannerContainer.removeAllViews();
+
+        if (bannerAdView != null) {
+            bannerAdView.destroy();
+            bannerAdView = null;
+        }
+
         bannerAdView = new AdView(activity);
         bannerAdView.setAdUnitId(AD_UNIT_BANNER);
         AdSize adSize = getAdaptiveBannerSize();
@@ -147,6 +196,7 @@ public class AdManager implements DefaultLifecycleObserver {
         bannerAdView.setAdListener(new AdListener() {
             @Override
             public void onAdLoaded() {
+                isBannerLoading = false;
                 bannerContainer.setVisibility(View.VISIBLE);
                 int heightDp = adSize.getHeightInPixels(activity) > 0
                         ? Math.round(adSize.getHeightInPixels(activity) / activity.getResources().getDisplayMetrics().density)
@@ -157,9 +207,18 @@ public class AdManager implements DefaultLifecycleObserver {
 
             @Override
             public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
+                isBannerLoading = false;
                 bannerContainer.setVisibility(View.GONE);
                 lastReportedBannerHeightDp = 0;
                 syncBannerHeightToWeb(0);
+
+                if (bannerAdView != null) {
+                    bannerAdView.destroy();
+                    bannerAdView = null;
+                }
+
+                mainHandler.removeCallbacks(bannerRetryRunnable);
+                mainHandler.postDelayed(bannerRetryRunnable, BANNER_RETRY_DELAY_MS);
             }
         });
 
@@ -171,7 +230,12 @@ public class AdManager implements DefaultLifecycleObserver {
         DisplayMetrics outMetrics = new DisplayMetrics();
         display.getMetrics(outMetrics);
         float density = outMetrics.density;
-        float adWidthPixels = bannerContainer.getWidth() > 0 ? bannerContainer.getWidth() : outMetrics.widthPixels;
+
+        View parent = bannerContainer.getParent() instanceof View ? (View) bannerContainer.getParent() : null;
+        float adWidthPixels = bannerContainer.getWidth() > 0
+                ? bannerContainer.getWidth()
+                : (parent != null && parent.getWidth() > 0 ? parent.getWidth() : outMetrics.widthPixels);
+
         int adWidth = (int) (adWidthPixels / density);
         return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(activity, Math.max(320, adWidth));
     }
@@ -210,7 +274,7 @@ public class AdManager implements DefaultLifecycleObserver {
     public void showInterstitialAd(@NonNull String placement) {
         mainHandler.post(() -> {
             if (isShowingFullScreenAd || interstitialAd == null) {
-                evaluateJs("if(window.onAdClosed){window.onAdClosed();}");
+                evaluateJs("if(window.onAdFailedToLoad){window.onAdFailedToLoad();}");
                 if (interstitialAd == null) loadInterstitialAd();
                 return;
             }
@@ -225,6 +289,7 @@ public class AdManager implements DefaultLifecycleObserver {
                 @Override
                 public void onAdDismissedFullScreenContent() {
                     isShowingFullScreenAd = false;
+                    lastFullScreenDismissedMs = System.currentTimeMillis();
                     interstitialAd = null;
                     evaluateJs("if(window.onAdClosed){window.onAdClosed();}");
                     loadInterstitialAd();
@@ -234,7 +299,7 @@ public class AdManager implements DefaultLifecycleObserver {
                 public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
                     isShowingFullScreenAd = false;
                     interstitialAd = null;
-                    evaluateJs("if(window.onAdClosed){window.onAdClosed();}");
+                    evaluateJs("if(window.onAdFailedToLoad){window.onAdFailedToLoad();}");
                     loadInterstitialAd();
                 }
             });
@@ -266,8 +331,7 @@ public class AdManager implements DefaultLifecycleObserver {
     public void showRewardedAd(@NonNull String rewardType) {
         mainHandler.post(() -> {
             if (isShowingFullScreenAd || rewardedAd == null) {
-                // Tetap berikan akses unduh jika iklan sedang kosong agar tombol unduh tidak macet
-                evaluateJs("if(window.onRewardEarned){window.onRewardEarned('" + escapeJs(rewardType) + "');}");
+                evaluateJs("if(window.onRewardFailed){window.onRewardFailed('not_ready');}");
                 if (rewardedAd == null) loadRewardedAd();
                 return;
             }
@@ -284,6 +348,7 @@ public class AdManager implements DefaultLifecycleObserver {
                 @Override
                 public void onAdDismissedFullScreenContent() {
                     isShowingFullScreenAd = false;
+                    lastFullScreenDismissedMs = System.currentTimeMillis();
                     rewardedAd = null;
                     if (rewardGranted[0]) {
                         evaluateJs("if(window.onRewardEarned){window.onRewardEarned('" + escapeJs(rewardType) + "');}");
@@ -297,7 +362,7 @@ public class AdManager implements DefaultLifecycleObserver {
                 public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
                     isShowingFullScreenAd = false;
                     rewardedAd = null;
-                    evaluateJs("if(window.onAdClosed){window.onAdClosed();}");
+                    evaluateJs("if(window.onRewardFailed){window.onRewardFailed('failed_to_show');}");
                     loadRewardedAd();
                 }
             });
@@ -307,7 +372,7 @@ public class AdManager implements DefaultLifecycleObserver {
     }
 
     // =========================================================================
-    // 4. APP OPEN AD (PEMBUKAAN APLIKASI)
+    // 4. APP OPEN AD (PEMBUKAAN APLIKASI - COLD START & WARM START)
     // =========================================================================
     public void loadAppOpenAd() {
         if (isLoadingAppOpen || isAppOpenAdAvailable() || activity.isFinishing() || activity.isDestroyed()) {
@@ -322,6 +387,7 @@ public class AdManager implements DefaultLifecycleObserver {
                         appOpenAd = ad;
                         isLoadingAppOpen = false;
                         appOpenLoadTimeMs = new Date().getTime();
+                        tryShowColdStartAppOpenAd();
                     }
 
                     @Override
@@ -337,11 +403,44 @@ public class AdManager implements DefaultLifecycleObserver {
         return (new Date().getTime() - appOpenLoadTimeMs) < fourHoursMs;
     }
 
-    @Override
-    public void onStart(@NonNull LifecycleOwner owner) {
-        if (!isContentReady || isExamOrGameActive || isShowingFullScreenAd) {
+    private boolean isAppInForeground() {
+        return !activity.isFinishing()
+                && !activity.isDestroyed()
+                && ProcessLifecycleOwner.get().getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED);
+    }
+
+    private void tryShowColdStartAppOpenAd() {
+        if (hasShownColdStartAd) return;
+        long elapsedSinceLaunch = System.currentTimeMillis() - appLaunchTimeMs;
+        if (elapsedSinceLaunch > COLD_START_TIMEOUT_MS) {
+            hasShownColdStartAd = true;
             return;
         }
+        if (isContentReady && isAppOpenAdAvailable() && !isExamOrGameActive && !isShowingFullScreenAd) {
+            hasShownColdStartAd = true;
+            showAppOpenAdInternal();
+        }
+    }
+
+    @Override
+    public void onStart(@NonNull LifecycleOwner owner) {
+        if (!isContentReady) {
+            loadAppOpenAd();
+            return;
+        }
+        hasShownColdStartAd = true;
+        showAppOpenAdInternal();
+    }
+
+    private void showAppOpenAdInternal() {
+        if (!isAppInForeground() || isExamOrGameActive || isShowingFullScreenAd) {
+            return;
+        }
+
+        if (System.currentTimeMillis() - lastFullScreenDismissedMs < FULLSCREEN_AD_COOLDOWN_MS) {
+            return;
+        }
+
         if (!isAppOpenAdAvailable()) {
             loadAppOpenAd();
             return;
@@ -360,6 +459,7 @@ public class AdManager implements DefaultLifecycleObserver {
             @Override
             public void onAdDismissedFullScreenContent() {
                 isShowingFullScreenAd = false;
+                lastFullScreenDismissedMs = System.currentTimeMillis();
                 appOpenAd = null;
                 evaluateJs("if(window.onAppOpenAdClosed){window.onAppOpenAdClosed();}");
                 loadAppOpenAd();
@@ -389,6 +489,7 @@ public class AdManager implements DefaultLifecycleObserver {
     }
 
     public void onDestroy() {
+        mainHandler.removeCallbacks(bannerRetryRunnable);
         ProcessLifecycleOwner.get().getLifecycle().removeObserver(this);
         if (bannerAdView != null) {
             bannerAdView.destroy();
