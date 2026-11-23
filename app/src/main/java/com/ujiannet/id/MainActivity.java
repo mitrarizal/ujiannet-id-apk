@@ -33,7 +33,7 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String BLOGSPOT_URL = "https://ujiannet-id.blogspot.com";
+    private static final String BLOGSPOT_URL = "https://ujiannet-id.blogspot.com/?m=1";
 
     private RelativeLayout rootContainer;
     private WebView webView;
