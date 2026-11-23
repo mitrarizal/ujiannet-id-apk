@@ -1,5 +1,5 @@
 # =========================================================================
-# 1. ATRIBUT INTI JAVA & PELACAKAN CRASH GOOGLE PLAY CONSOLE
+# 1. ATRIBUT INTI JAVA & PELACAKAN CRASH PLAY CONSOLE
 # =========================================================================
 -keepattributes JavascriptInterface
 -keepattributes *Annotation*
@@ -10,7 +10,7 @@
 -renamesourcefileattribute SourceFile
 
 # =========================================================================
-# 2. PERLINDUNGAN ANDROID WEBVIEW & @JavascriptInterface
+# 2. PERLINDUNGAN WEBVIEW & @JavascriptInterface (com.ujiannet.id)
 # =========================================================================
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
@@ -58,13 +58,17 @@
 }
 
 # =========================================================================
-# 4. GOOGLE MOBILE ADS SDK (BANNER, INTERSTITIAL, REWARDED, APP OPEN)
+# 4. GOOGLE MOBILE ADS SDK & UMP CONSENT SDK
 # =========================================================================
 -keep public class com.google.android.gms.ads.** {
     public *;
 }
 
 -keep public class com.google.ads.** {
+    public *;
+}
+
+-keep public class com.google.android.ump.** {
     public *;
 }
 
@@ -76,3 +80,4 @@
 
 -dontwarn com.google.android.gms.**
 -dontwarn com.google.ads.**
+-dontwarn com.google.android.ump.**
