@@ -26,6 +26,11 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.android.gms.ads.identifier.AdvertisingIdClient;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String BLOGSPOT_URL = "https://ujiannet-id.blogspot.com/?m=1";
@@ -34,7 +39,12 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private FrameLayout nativeAdContainer;
     private AdManager adManager;
-    private boolean isInExamSession = false;
+
+    private final ExecutorService bgExecutor = Executors.newSingleThreadExecutor();
+    private volatile boolean isInExamSession = false;
+    private volatile boolean isAdIdFetched = false;
+    private volatile String cachedAdId = "";
+    private volatile boolean isLimitAdTracking = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,13 +52,14 @@ public class MainActivity extends AppCompatActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
 
-        setupEdgeToEdgeInsets();
-
         rootContainer = findViewById(R.id.root_container);
         webView = findViewById(R.id.main_webview);
         nativeAdContainer = findViewById(R.id.native_ad_container);
 
+        setupEdgeToEdgeInsets();
+
         adManager = new AdManager(this, webView, nativeAdContainer);
+        fetchAdvertisingIdAsync();
 
         setupWebView();
         setupBackNavigation();
@@ -61,17 +72,49 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Wajib untuk Android 15/16 (SDK 36) agar tombol Native Ad & WebView tidak tertutup status/navigation bar.
+     * Wajib untuk Android 15/16 (SDK 36) agar tombol Native Ad, WebView, dan keyboard tidak saling bertumpuk.
      */
     private void setupEdgeToEdgeInsets() {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        View decorView = getWindow().getDecorView();
-        ViewCompat.setOnApplyWindowInsetsListener(decorView, (v, windowInsets) -> {
+        View targetView = rootContainer != null ? rootContainer : getWindow().getDecorView();
+        ViewCompat.setOnApplyWindowInsetsListener(targetView, (v, windowInsets) -> {
             Insets insets = windowInsets.getInsets(
                     WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.ime()
             );
             v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
             return WindowInsetsCompat.CONSUMED;
+        });
+    }
+
+    /**
+     * Mengambil status Advertising ID (AD_ID) di background thread sesuai aturan Google Play & AdMob.
+     */
+    private void fetchAdvertisingIdAsync() {
+        bgExecutor.execute(() -> {
+            try {
+                AdvertisingIdClient.Info info = AdvertisingIdClient.getAdvertisingIdInfo(getApplicationContext());
+                if (info != null) {
+                    cachedAdId = info.getId() != null ? info.getId() : "";
+                    isLimitAdTracking = info.isLimitAdTrackingEnabled();
+                }
+            } catch (Exception ignored) {
+                cachedAdId = "";
+                isLimitAdTracking = false;
+            } finally {
+                isAdIdFetched = true;
+                notifyJsAdIdSynced();
+            }
+        });
+    }
+
+    private void notifyJsAdIdSynced() {
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed() || webView == null) return;
+            String safeId = cachedAdId.replace("\\", "\\\\").replace("'", "\\'");
+            boolean consentReady = adManager != null && adManager.isConsentCompleted();
+            String script = "if(window.onAdIdReady){window.onAdIdReady('"
+                    + safeId + "'," + isLimitAdTracking + "," + consentReady + ");}";
+            webView.evaluateJavascript(script, null);
         });
     }
 
@@ -103,6 +146,13 @@ public class MainActivity extends AppCompatActivity {
         webView.addJavascriptInterface(jsBridge, "AndroidAdMob");
         webView.addJavascriptInterface(jsBridge, "AndroidApp");
 
+        // Tangani unduhan dokumen soal (PDF, DOCX, XLSX, ZIP) secara langsung
+        webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+            if (url != null && !url.isEmpty()) {
+                openExternalUri(Uri.parse(url));
+            }
+        });
+
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -120,12 +170,11 @@ public class MainActivity extends AppCompatActivity {
                             || host.contains("accounts.google.com"))) {
                         return false;
                     }
-                    // Buka tautan eksternal di browser/aplikasi luar tanpa merusak sesi WebView
+                    // Buka tautan eksternal (Google Drive, WhatsApp, dll.) di aplikasi luar tanpa merusak sesi WebView
                     openExternalUri(uri);
                     return true;
                 }
 
-                // Tangani skema whatsapp:, mailto:, tel:, intent:
                 openExternalUri(uri);
                 return true;
             }
@@ -135,6 +184,14 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 if (url != null && !url.startsWith("data:")) {
                     adManager.onContentReady();
+                    view.evaluateJavascript(
+                            "window.dispatchEvent(new Event('AndroidAdMobReady'));"
+                                    + "if(window.onAdMobBridgeReady){window.onAdMobBridgeReady();}",
+                            null
+                    );
+                    if (isAdIdFetched) {
+                        notifyJsAdIdSynced();
+                    }
                 }
             }
 
@@ -214,6 +271,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        bgExecutor.shutdownNow();
         if (adManager != null) adManager.onDestroy();
         if (webView != null) {
             webView.removeAllViews();
@@ -223,7 +281,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Jembatan JavaScript antara https://ujiannet-id.blogspot.com/?m=1 dan Android Native.
+     * Jembatan JavaScript dua arah antara https://ujiannet-id.blogspot.com/?m=1 dan Android Native.
      */
     private class WebAppAdMobInterface {
 
@@ -234,6 +292,18 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void onGameContentReady() {
+            adManager.onContentReady();
+        }
+
+        @JavascriptInterface
+        public void onAppOpenReady(String pageType, boolean eligible) {
+            isInExamSession = !eligible;
+            adManager.setExamSessionActive(!eligible);
+            adManager.onContentReady();
+        }
+
+        @JavascriptInterface
+        public void notifyPageReady(String pageType) {
             adManager.onContentReady();
         }
 
@@ -250,8 +320,34 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public void setAppOpenEligible(boolean eligible) {
+            isInExamSession = !eligible;
+            adManager.setExamSessionActive(!eligible);
+        }
+
+        @JavascriptInterface
         public void setNativeAdVisible(boolean visible) {
             adManager.setNativeAdVisible(visible);
+        }
+
+        @JavascriptInterface
+        public boolean isInterstitialReady() {
+            return adManager.isInterstitialAdReady();
+        }
+
+        @JavascriptInterface
+        public boolean isInterstitialLoaded() {
+            return adManager.isInterstitialAdReady();
+        }
+
+        @JavascriptInterface
+        public void preloadInterstitial() {
+            runOnUiThread(() -> adManager.loadInterstitialAd());
+        }
+
+        @JavascriptInterface
+        public void preloadAppOpenAd() {
+            runOnUiThread(() -> adManager.loadAppOpenAd());
         }
 
         @JavascriptInterface
@@ -264,15 +360,64 @@ public class MainActivity extends AppCompatActivity {
             adManager.showInterstitialAd("exam_transition");
         }
 
-        // Stub kompatibilitas mundur agar skrip lama di Blogspot tidak melempar error JS
+        @JavascriptInterface
+        public void requestAdId() {
+            if (isAdIdFetched) {
+                notifyJsAdIdSynced();
+            } else {
+                fetchAdvertisingIdAsync();
+            }
+        }
+
+        @JavascriptInterface
+        public boolean isAdIdReady() {
+            return isAdIdFetched;
+        }
+
+        @JavascriptInterface
+        public String getAdId() {
+            return cachedAdId;
+        }
+
+        @JavascriptInterface
+        public String getAdvertisingId() {
+            return cachedAdId;
+        }
+
+        @JavascriptInterface
+        public boolean isLimitAdTrackingEnabled() {
+            return isLimitAdTracking;
+        }
+
+        @JavascriptInterface
+        public boolean getLimitAdTracking() {
+            return isLimitAdTracking;
+        }
+
+        @JavascriptInterface
+        public boolean isConsentReady() {
+            return adManager.isConsentCompleted();
+        }
+
+        // Stub kompatibilitas mundur (fokus iklan hanya App Open, Native, dan Interstisial)
         @JavascriptInterface
         public int getBannerHeightPx() {
             return 0;
         }
 
         @JavascriptInterface
+        public int getBannerHeightDp() {
+            return 0;
+        }
+
+        @JavascriptInterface
+        public boolean isBannerOverlay() {
+            return false;
+        }
+
+        @JavascriptInterface
         public void showRewardedAd(String rewardType) {
-            // Tidak digunakan (fokus hanya App Open, Native, dan Interstisial)
+            // Tidak digunakan
         }
 
         @JavascriptInterface
