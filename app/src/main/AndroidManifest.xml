@@ -28,7 +28,7 @@
         <!-- Ganti dengan App ID AdMob Produksi Anda (ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-6983364109428063~9895116909" />
 
         <!-- Optimasi inisialisasi & pemuatan iklan di background thread agar aplikasi bebas macet -->
         <meta-data
