@@ -41,9 +41,9 @@ import com.google.android.ump.UserMessagingPlatform;
 public class AdManager implements DefaultLifecycleObserver {
 
     // GANTI 3 UNIT ID INI DENGAN UNIT ID PRODUKSI ADMOB ANDA SEBELUM RILIS KE PLAY STORE
-    private static final String AD_UNIT_APP_OPEN = "ca-app-pub-3940256099942544/9257395921";
-    private static final String AD_UNIT_NATIVE = "ca-app-pub-3940256099942544/2247696110";
-    private static final String AD_UNIT_INTERSTITIAL = "ca-app-pub-3940256099942544/1033173712";
+    private static final String AD_UNIT_APP_OPEN = "ca-app-pub-6983364109428063/7652300206";
+    private static final String AD_UNIT_NATIVE = "ca-app-pub-6983364109428063/2345007949";
+    private static final String AD_UNIT_INTERSTITIAL = "ca-app-pub-6983364109428063/6079819961";
 
     // Batas frekuensi & waktu tunggu standar kebijakan Google AdMob
     private static final long INTERSTITIAL_COOLDOWN_MS = 45_000L;
