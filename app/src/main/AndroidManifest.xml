@@ -1,23 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Izin Jaringan Wajib -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- WAJIB SDK 33–36 & GOOGLE PLAY: Deklarasi eksplisit izin Advertising ID untuk AdMob -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
     <application
         android:allowBackup="true"
         android:hardwareAccelerated="true"
-        android:icon="@drawable/ic_launcher"
-        android:label="Ujiannet ID"
-        android:roundIcon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:label="UjianNet ID"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MaterialComponents.Light.NoActionBar"
         android:usesCleartextTraffic="false">
 
-        <!-- Ganti dengan App ID AdMob Produksi Anda -->
+        <!-- Ganti dengan App ID AdMob Produksi Anda (ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-6983364109428063~9895116909" />
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
+        <!-- Optimasi inisialisasi SDK iklan di background thread agar aplikasi tidak macet -->
+        <meta-data
+            android:name="com.google.android.gms.ads.flag.OPTIMIZE_INITIALIZATION"
+            android:value="true" />
+        <meta-data
+            android:name="com.google.android.gms.ads.flag.OPTIMIZE_AD_LOADING"
+            android:value="true" />
 
         <activity
             android:name=".MainActivity"
