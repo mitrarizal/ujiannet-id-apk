@@ -1,24 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/root_layout"
+    android:id="@+id/root_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F0F9FF"
-    android:fitsSystemWindows="true">
+    android:background="#F8FAFC">
 
     <WebView
-        android:id="@+id/game_webview"
+        android:id="@+id/main_webview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_above="@id/banner_ad_container" />
+        android:layout_above="@id/native_ad_container" />
 
-    <!-- Kontainer Adaptive Banner di bagian bawah -->
+    <!-- Kontainer Native Advanced (Tampil di Beranda / Daftar Paket / Hasil Ujian) -->
     <FrameLayout
-        android:id="@+id/banner_ad_container"
+        android:id="@+id/native_ad_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:background="#FFFFFF"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="10dp"
+        android:layout_marginBottom="8dp"
         android:visibility="gone" />
 
 </RelativeLayout>
