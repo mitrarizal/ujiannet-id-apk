@@ -2,6 +2,7 @@ package com.ujiannet.id;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -16,7 +17,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.RelativeLayout;
+import android.widget.LinearLayout;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
@@ -25,9 +26,11 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.google.android.gms.ads.identifier.AdvertisingIdClient;
 
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -35,8 +38,9 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String BLOGSPOT_URL = "https://ujiannet-id.blogspot.com/?m=1";
 
-    private RelativeLayout rootContainer;
+    private LinearLayout rootContainer;
     private WebView webView;
+    private View adSectionDivider;
     private FrameLayout nativeAdContainer;
     private AdManager adManager;
 
@@ -49,16 +53,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
 
         rootContainer = findViewById(R.id.root_container);
         webView = findViewById(R.id.main_webview);
+        adSectionDivider = findViewById(R.id.ad_section_divider);
         nativeAdContainer = findViewById(R.id.native_ad_container);
 
         setupEdgeToEdgeInsets();
 
-        adManager = new AdManager(this, webView, nativeAdContainer);
+        adManager = new AdManager(this, webView, nativeAdContainer, adSectionDivider);
         fetchAdvertisingIdAsync();
 
         setupWebView();
@@ -72,10 +76,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Wajib untuk Android 15/16 (SDK 36) agar tombol Native Ad, WebView, dan keyboard tidak saling bertumpuk.
+     * Mengatur jarak aman system bars + IME serta memastikan ikon status bar & navigasi sistem terlihat jelas.
      */
     private void setupEdgeToEdgeInsets() {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        WindowInsetsControllerCompat insetsController =
+                WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (insetsController != null) {
+            insetsController.setAppearanceLightStatusBars(true);
+            insetsController.setAppearanceLightNavigationBars(true);
+        }
+
         View targetView = rootContainer != null ? rootContainer : getWindow().getDecorView();
         ViewCompat.setOnApplyWindowInsetsListener(targetView, (v, windowInsets) -> {
             Insets insets = windowInsets.getInsets(
@@ -86,9 +97,41 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /**
-     * Mengambil status Advertising ID (AD_ID) di background thread sesuai aturan Google Play & AdMob.
-     */
+    private void updateExamSessionState(boolean active) {
+        this.isInExamSession = active;
+        if (adManager != null) {
+            adManager.setExamSessionActive(active);
+        }
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            if (active) {
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } else {
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            }
+        });
+    }
+
+    private boolean isUrlAllowedForNativeAd(String url) {
+        if (url == null || url.isEmpty() || url.startsWith("data:") || url.startsWith("file:")) {
+            return false;
+        }
+        try {
+            Uri uri = Uri.parse(url);
+            String path = uri.getPath();
+            if (path != null) {
+                String lowerPath = path.toLowerCase(Locale.ROOT);
+                // Jangan tampilkan iklan pada halaman kebijakan (/p/...) atau halaman pencarian (/search)
+                if (lowerPath.startsWith("/p/") || lowerPath.startsWith("/search")) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private void fetchAdvertisingIdAsync() {
         bgExecutor.execute(() -> {
             try {
@@ -138,7 +181,7 @@ public class MainActivity extends AppCompatActivity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
-        webView.setBackgroundColor(Color.parseColor("#F8FAFC"));
+        webView.setBackgroundColor(Color.parseColor("#FFFFFF"));
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
@@ -146,7 +189,6 @@ public class MainActivity extends AppCompatActivity {
         webView.addJavascriptInterface(jsBridge, "AndroidAdMob");
         webView.addJavascriptInterface(jsBridge, "AndroidApp");
 
-        // Tangani unduhan dokumen soal (PDF, DOCX, XLSX, ZIP) secara langsung
         webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
             if (url != null && !url.isEmpty()) {
                 openExternalUri(Uri.parse(url));
@@ -170,7 +212,6 @@ public class MainActivity extends AppCompatActivity {
                             || host.contains("accounts.google.com"))) {
                         return false;
                     }
-                    // Buka tautan eksternal (Google Drive, WhatsApp, dll.) di aplikasi luar tanpa merusak sesi WebView
                     openExternalUri(uri);
                     return true;
                 }
@@ -180,9 +221,16 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                adManager.setPagePolicyAllowed(isUrlAllowedForNativeAd(url));
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (url != null && !url.startsWith("data:")) {
+                if (url != null && !url.startsWith("data:") && !url.startsWith("file:")) {
+                    adManager.setPagePolicyAllowed(isUrlAllowedForNativeAd(url));
                     adManager.onContentReady();
                     view.evaluateJavascript(
                             "window.dispatchEvent(new Event('AndroidAdMobReady'));"
@@ -192,6 +240,8 @@ public class MainActivity extends AppCompatActivity {
                     if (isAdIdFetched) {
                         notifyJsAdIdSynced();
                     }
+                } else {
+                    adManager.setPagePolicyAllowed(false);
                 }
             }
 
@@ -199,6 +249,7 @@ public class MainActivity extends AppCompatActivity {
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
+                    adManager.setPagePolicyAllowed(false);
                     showOfflineFallbackPage();
                 }
             }
@@ -210,11 +261,11 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(Intent.ACTION_VIEW, uri);
             startActivity(intent);
         } catch (Exception ignored) {
-            // Abaikan secara aman jika perangkat tidak memiliki aplikasi penangan skema tersebut
         }
     }
 
     private void showOfflineFallbackPage() {
+        adManager.setPagePolicyAllowed(false);
         String offlineHtml = "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<style>body{font-family:sans-serif;background:#F8FAFC;color:#0F172A;display:flex;flex-direction:column;"
                 + "align-items:center;justify-content:center;height:100vh;margin:0;padding:24px;text-align:center;}"
@@ -280,9 +331,6 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    /**
-     * Jembatan JavaScript dua arah antara https://ujiannet-id.blogspot.com/?m=1 dan Android Native.
-     */
     private class WebAppAdMobInterface {
 
         @JavascriptInterface
@@ -297,8 +345,7 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void onAppOpenReady(String pageType, boolean eligible) {
-            isInExamSession = !eligible;
-            adManager.setExamSessionActive(!eligible);
+            updateExamSessionState(!eligible);
             adManager.onContentReady();
         }
 
@@ -309,20 +356,17 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void setExamState(boolean active) {
-            isInExamSession = active;
-            adManager.setExamSessionActive(active);
+            updateExamSessionState(active);
         }
 
         @JavascriptInterface
         public void setGameplayState(boolean active) {
-            isInExamSession = active;
-            adManager.setExamSessionActive(active);
+            updateExamSessionState(active);
         }
 
         @JavascriptInterface
         public void setAppOpenEligible(boolean eligible) {
-            isInExamSession = !eligible;
-            adManager.setExamSessionActive(!eligible);
+            updateExamSessionState(!eligible);
         }
 
         @JavascriptInterface
@@ -352,12 +396,12 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void showInterstitial(String placement) {
-            adManager.showInterstitialAd(placement != null ? placement : "exam_transition");
+            adManager.showInterstitialAd(placement != null ? placement : "article_transition");
         }
 
         @JavascriptInterface
         public void panggilIklanInterstisial() {
-            adManager.showInterstitialAd("exam_transition");
+            adManager.showInterstitialAd("article_transition");
         }
 
         @JavascriptInterface
@@ -399,7 +443,6 @@ public class MainActivity extends AppCompatActivity {
             return adManager.isConsentCompleted();
         }
 
-        // Stub kompatibilitas mundur (fokus iklan hanya App Open, Native, dan Interstisial)
         @JavascriptInterface
         public int getBannerHeightPx() {
             return 0;
@@ -417,12 +460,10 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void showRewardedAd(String rewardType) {
-            // Tidak digunakan
         }
 
         @JavascriptInterface
         public void panggilIklanRewarded() {
-            // Tidak digunakan
         }
     }
 }
