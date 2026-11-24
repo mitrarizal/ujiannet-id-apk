@@ -2,22 +2,25 @@
 <com.google.android.gms.ads.nativead.NativeAdView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="#FFFFFF"
-    android:elevation="4dp"
-    android:padding="10dp">
+    android:background="@drawable/bg_native_ad_card"
+    android:paddingStart="10dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="10dp"
+    android:paddingBottom="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- Atribusi Wajib Google AdMob (Jangan dihapus/disembunyikan) -->
+        <!-- Baris Atribusi Wajib Google AdMob (Dengan ruang kanan untuk ikon AdChoices) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="6dp"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingEnd="24dp">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -29,7 +32,7 @@
                 android:paddingBottom="2dp"
                 android:text="Iklan"
                 android:textColor="#92400E"
-                android:textSize="10sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -40,11 +43,11 @@
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#64748B"
+                android:textColor="#475569"
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- Konten Utama Native Ad -->
+        <!-- Konten Utama Native Ad (Tanpa MediaView < 120dp agar patuh kebijakan video) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -53,8 +56,8 @@
 
             <ImageView
                 android:id="@+id/ad_app_icon"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="46dp"
+                android:layout_height="46dp"
                 android:layout_marginEnd="10dp"
                 android:contentDescription="Ikon Pengiklan"
                 android:scaleType="centerCrop" />
@@ -62,6 +65,7 @@
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginEnd="10dp"
                 android:layout_weight="1"
                 android:orientation="vertical">
 
@@ -79,25 +83,19 @@
                     android:id="@+id/ad_body"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
                     android:ellipsize="end"
                     android:maxLines="2"
                     android:textColor="#475569"
                     android:textSize="12sp" />
             </LinearLayout>
 
-            <com.google.android.gms.ads.nativead.MediaView
-                android:id="@+id/ad_media"
-                android:layout_width="72dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp" />
-
             <Button
                 android:id="@+id/ad_call_to_action"
                 android:layout_width="wrap_content"
                 android:layout_height="38dp"
                 android:backgroundTint="#0284C7"
-                android:minWidth="74dp"
+                android:minWidth="78dp"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:textColor="#FFFFFF"
