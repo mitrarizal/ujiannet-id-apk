@@ -14,9 +14,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.lifecycle.DefaultLifecycleObserver;
 import androidx.lifecycle.Lifecycle;
-import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.ProcessLifecycleOwner;
 
 import com.google.android.gms.ads.AdError;
@@ -27,7 +25,6 @@ import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.RequestConfiguration;
-import com.google.android.gms.ads.appopen.AppOpenAd;
 import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 import com.google.android.gms.ads.nativead.NativeAd;
@@ -37,16 +34,13 @@ import com.google.android.ump.ConsentInformation;
 import com.google.android.ump.ConsentRequestParameters;
 import com.google.android.ump.UserMessagingPlatform;
 
-public class AdManager implements DefaultLifecycleObserver {
+public class AdManager {
 
-    private static final String AD_UNIT_APP_OPEN = "ca-app-pub-6983364109428063/7652300206";
     private static final String AD_UNIT_NATIVE = "ca-app-pub-6983364109428063/2345007949";
     private static final String AD_UNIT_INTERSTITIAL = "ca-app-pub-6983364109428063/6079819961";
 
-    // Batas frekuensi & jeda aman kebijakan Google AdMob (tersinkron dengan Blogspot XML)
+    // Batas frekuensi & jeda aman kebijakan Google AdMob
     private static final long INTERSTITIAL_COOLDOWN_MS = 60_000L;
-    private static final long APP_OPEN_COOLDOWN_MS = 60_000L;
-    private static final long WARM_RESUME_MIN_UPTIME_MS = 12_000L;
     private static final long RETRY_DELAY_MS = 25_000L;
     private static final int MAX_RETRY_ATTEMPTS = 2;
 
@@ -57,7 +51,6 @@ public class AdManager implements DefaultLifecycleObserver {
     private final View adSectionDivider;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private volatile AppOpenAd appOpenAd;
     private volatile NativeAd currentNativeAd;
     private volatile InterstitialAd interstitialAd;
 
@@ -69,17 +62,12 @@ public class AdManager implements DefaultLifecycleObserver {
     private volatile boolean isNativeAllowedByWeb = true;
     private volatile boolean isShowingFullScreenAd = false;
 
-    private boolean isLoadingAppOpen = false;
     private boolean isLoadingInterstitial = false;
     private boolean isLoadingNative = false;
 
-    private int appOpenRetryCount = 0;
     private int nativeRetryCount = 0;
     private int interstitialRetryCount = 0;
 
-    private final long appLaunchElapsedMs = SystemClock.elapsedRealtime();
-    private long appOpenLoadElapsedMs = 0L;
-    private long lastAppOpenShownElapsedMs = 0L;
     private long lastInterstitialShownElapsedMs = 0L;
 
     public AdManager(@NonNull Activity activity,
@@ -91,7 +79,6 @@ public class AdManager implements DefaultLifecycleObserver {
         this.nativeAdContainer = nativeAdContainer;
         this.adSectionDivider = adSectionDivider;
 
-        ProcessLifecycleOwner.get().getLifecycle().addObserver(this);
         setupStandardAdConfiguration();
         requestConsentAndInitializeAds();
     }
@@ -132,7 +119,6 @@ public class AdManager implements DefaultLifecycleObserver {
         isSdkInitialized = true;
 
         MobileAds.initialize(activity.getApplicationContext(), initializationStatus -> mainHandler.post(() -> {
-            loadAppOpenAd();
             loadInterstitialAd();
             loadNativeAdvancedAd();
         }));
@@ -148,6 +134,18 @@ public class AdManager implements DefaultLifecycleObserver {
         return interstitialAd != null && !isShowingFullScreenAd && !isExamSessionActive && !inCooldown;
     }
 
+    /**
+     * Dipanggil saat halaman baru mulai dimuat (onPageStarted) untuk menyembunyikan iklan
+     * sementara hingga konten benar-benar siap tampil.
+     */
+    public void onPageLoading(boolean allowedByUrl) {
+        mainHandler.post(() -> {
+            this.isContentReady = false;
+            this.isNativeAllowedByUrl = allowedByUrl;
+            updateNativeContainerVisibility();
+        });
+    }
+
     public void onContentReady() {
         mainHandler.post(() -> {
             isContentReady = true;
@@ -159,13 +157,12 @@ public class AdManager implements DefaultLifecycleObserver {
     }
 
     /**
-     * Kontrol langsung dari URL Android sebelum halaman selesai dimuat (menutup celah iklan di halaman legal/pencarian).
+     * Kontrol langsung dari URL Android untuk memblokir iklan di halaman legal/pencarian/login.
      */
     public void setPagePolicyAllowed(boolean allowed) {
         mainHandler.post(() -> {
             this.isNativeAllowedByUrl = allowed;
             if (allowed) {
-                // Reset flag web sementara sampai JS halaman baru mengonfirmasi konteksnya
                 this.isNativeAllowedByWeb = true;
                 if (currentNativeAd == null && !isLoadingNative) {
                     loadNativeAdvancedAd();
@@ -218,103 +215,7 @@ public class AdManager implements DefaultLifecycleObserver {
     }
 
     // =========================================================================
-    // 1. APP OPEN AD (HANYA PADA WARM RESUME - TIDAK MEMOTONG BACAAN AWAL)
-    // =========================================================================
-    public void loadAppOpenAd() {
-        if (!isSdkInitialized || isLoadingAppOpen || isAppOpenAdAvailable()) return;
-        if (activity.isFinishing() || activity.isDestroyed()) return;
-
-        isLoadingAppOpen = true;
-        AppOpenAd.load(
-                activity,
-                AD_UNIT_APP_OPEN,
-                buildAdRequest(),
-                new AppOpenAd.AppOpenAdLoadCallback() {
-                    @Override
-                    public void onAdLoaded(@NonNull AppOpenAd ad) {
-                        appOpenAd = ad;
-                        isLoadingAppOpen = false;
-                        appOpenRetryCount = 0;
-                        appOpenLoadElapsedMs = SystemClock.elapsedRealtime();
-                    }
-
-                    @Override
-                    public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
-                        isLoadingAppOpen = false;
-                        appOpenAd = null;
-                        evaluateJs("if(window.onAppOpenAdFailedToLoad){window.onAppOpenAdFailedToLoad();}");
-
-                        if (appOpenRetryCount < MAX_RETRY_ATTEMPTS) {
-                            appOpenRetryCount++;
-                            mainHandler.postDelayed(() -> loadAppOpenAd(), RETRY_DELAY_MS);
-                        }
-                    }
-                }
-        );
-    }
-
-    private boolean isAppOpenAdAvailable() {
-        if (appOpenAd == null) return false;
-        long fourHoursMs = 4L * 3600L * 1000L;
-        return (SystemClock.elapsedRealtime() - appOpenLoadElapsedMs) < fourHoursMs;
-    }
-
-    @Override
-    public void onStart(@NonNull LifecycleOwner owner) {
-        long now = SystemClock.elapsedRealtime();
-        // Hindari kemunculan mendadak saat cold-start awal atau saat sedang ujian/halaman legal
-        if ((now - appLaunchElapsedMs) < WARM_RESUME_MIN_UPTIME_MS) {
-            return;
-        }
-        if (isExamSessionActive || !isNativeAllowedByUrl || !isNativeAllowedByWeb || isShowingFullScreenAd) {
-            return;
-        }
-        if (lastAppOpenShownElapsedMs > 0L && (now - lastAppOpenShownElapsedMs) < APP_OPEN_COOLDOWN_MS) {
-            return;
-        }
-        if (!isAppOpenAdAvailable()) {
-            loadAppOpenAd();
-            return;
-        }
-        showAppOpenAdInternal();
-    }
-
-    private void showAppOpenAdInternal() {
-        if (!isAppInForeground() || !isAppOpenAdAvailable()) return;
-
-        appOpenAd.setFullScreenContentCallback(new FullScreenContentCallback() {
-            @Override
-            public void onAdShowedFullScreenContent() {
-                isShowingFullScreenAd = true;
-                lastAppOpenShownElapsedMs = SystemClock.elapsedRealtime();
-                updateNativeContainerVisibility();
-                evaluateJs("if(window.onAppOpenAdOpened){window.onAppOpenAdOpened();}");
-            }
-
-            @Override
-            public void onAdDismissedFullScreenContent() {
-                isShowingFullScreenAd = false;
-                appOpenAd = null;
-                updateNativeContainerVisibility();
-                evaluateJs("if(window.onAppOpenAdClosed){window.onAppOpenAdClosed();}");
-                loadAppOpenAd();
-            }
-
-            @Override
-            public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
-                isShowingFullScreenAd = false;
-                appOpenAd = null;
-                updateNativeContainerVisibility();
-                evaluateJs("if(window.onAppOpenAdClosed){window.onAppOpenAdClosed();}");
-                loadAppOpenAd();
-            }
-        });
-
-        appOpenAd.show(activity);
-    }
-
-    // =========================================================================
-    // 2. NATIVE ADVANCED AD (BERANDA & ARTIKEL MATERI - PATUH UKURAN ASET)
+    // 1. NATIVE ADVANCED AD (BERANDA & ARTIKEL MATERI - PATUH UKURAN ASET)
     // =========================================================================
     public void loadNativeAdvancedAd() {
         if (!isSdkInitialized || isLoadingNative) return;
@@ -352,10 +253,7 @@ public class AdManager implements DefaultLifecycleObserver {
                     @Override
                     public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
                         isLoadingNative = false;
-                        nativeAdContainer.setVisibility(View.GONE);
-                        if (adSectionDivider != null) {
-                            adSectionDivider.setVisibility(View.GONE);
-                        }
+                        updateNativeContainerVisibility();
 
                         if (nativeRetryCount < MAX_RETRY_ATTEMPTS) {
                             nativeRetryCount++;
@@ -416,7 +314,7 @@ public class AdManager implements DefaultLifecycleObserver {
     }
 
     // =========================================================================
-    // 3. INTERSTITIAL AD (TRANSISI ANTAR-ARTIKEL / SELESAI UJIAN)
+    // 2. INTERSTITIAL AD (TRANSISI ANTAR-ARTIKEL / SELESAI UJIAN)
     // =========================================================================
     public void loadInterstitialAd() {
         if (!isSdkInitialized || isLoadingInterstitial || interstitialAd != null) return;
@@ -497,14 +395,13 @@ public class AdManager implements DefaultLifecycleObserver {
     // LIFECYCLE & UTILITAS
     // =========================================================================
     public void onDestroy() {
-        ProcessLifecycleOwner.get().getLifecycle().removeObserver(this);
         mainHandler.removeCallbacksAndMessages(null);
+        nativeAdContainer.removeAllViews();
         if (currentNativeAd != null) {
             currentNativeAd.destroy();
             currentNativeAd = null;
         }
         interstitialAd = null;
-        appOpenAd = null;
     }
 
     private void evaluateJs(@NonNull String script) {
