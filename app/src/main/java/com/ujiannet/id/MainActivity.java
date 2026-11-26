@@ -118,6 +118,15 @@ public class MainActivity extends AppCompatActivity {
         }
         try {
             Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (host == null) {
+                return false;
+            }
+            String lowerHost = host.toLowerCase(Locale.ROOT);
+            // Hanya izinkan iklan pada domain konten utama (blokir halaman login accounts.google.com, dll.)
+            if (!lowerHost.contains("ujiannet-id.blogspot.com")) {
+                return false;
+            }
             String path = uri.getPath();
             if (path != null) {
                 String lowerPath = path.toLowerCase(Locale.ROOT);
@@ -223,7 +232,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                adManager.setPagePolicyAllowed(isUrlAllowedForNativeAd(url));
+                // Sembunyikan wadah iklan selama proses pemuatan halaman berlangsung
+                adManager.onPageLoading(isUrlAllowedForNativeAd(url));
             }
 
             @Override
@@ -325,8 +335,13 @@ public class MainActivity extends AppCompatActivity {
         bgExecutor.shutdownNow();
         if (adManager != null) adManager.onDestroy();
         if (webView != null) {
+            if (rootContainer != null) {
+                rootContainer.removeView(webView);
+            }
+            webView.loadUrl("about:blank");
             webView.removeAllViews();
             webView.destroy();
+            webView = null;
         }
         super.onDestroy();
     }
@@ -389,9 +404,9 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> adManager.loadInterstitialAd());
         }
 
+        // Stub aman agar skrip Blogspot lama tidak error jika memanggil preloadAppOpenAd()
         @JavascriptInterface
         public void preloadAppOpenAd() {
-            runOnUiThread(() -> adManager.loadAppOpenAd());
         }
 
         @JavascriptInterface
